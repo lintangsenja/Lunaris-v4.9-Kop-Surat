@@ -17,6 +17,8 @@ import com.example.data.entity.BahanAfkirEntity
 import com.example.data.entity.ProfileEntity
 import com.example.data.entity.MutasiPerangkatEntity
 import com.example.data.entity.UserEntity
+import com.example.data.entity.KopLaporanEntity
+import com.example.data.entity.RecentKopEntity
 import kotlinx.coroutines.flow.Flow
 
 import com.example.data.entity.CategoryEntity
@@ -645,4 +647,24 @@ interface InventoryDao {
 
     @Query("DELETE FROM mutasi_perangkat WHERE isDemo = 1")
     suspend fun deleteDemoMutasiPerangkat()
+
+    // Kop Laporan
+    @Query("SELECT * FROM kop_laporan WHERE id = 1 LIMIT 1")
+    fun getKopLaporanFlow(): Flow<KopLaporanEntity?>
+
+    @Query("SELECT * FROM kop_laporan WHERE id = 1 LIMIT 1")
+    suspend fun getKopLaporanSync(): KopLaporanEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveKopLaporan(kop: KopLaporanEntity)
+
+    // Recent Kop History
+    @Query("SELECT * FROM recent_kop ORDER BY timestamp DESC LIMIT 20")
+    fun getRecentKopListFlow(): Flow<List<RecentKopEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecentKop(recent: RecentKopEntity)
+
+    @Query("DELETE FROM recent_kop WHERE id = :id")
+    suspend fun deleteRecentKop(id: Int)
 }

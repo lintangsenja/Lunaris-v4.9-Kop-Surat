@@ -1,4 +1,6 @@
 package com.example.ui.screens
+import com.example.data.entity.KopLaporanEntity
+import com.example.data.entity.parseKopRowOrder
 import com.example.ui.components.LunarisCard
 import com.example.ui.components.CameraScannerDialog
 import com.example.ui.components.LunarisDatePickerDialog
@@ -101,12 +103,14 @@ data class ReturnedLineItem(
 fun LaporanScreen(
     viewModel: InventoryViewModel,
     onNavigateBack: () -> Unit,
+    onNavigateToKopLaporan: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     // Real-time Data from Room
+    val kopState by viewModel.kopLaporan.collectAsState()
     val transactions by viewModel.allTransactions.collectAsState()
     val itemsWithStock by viewModel.itemsWithStock.collectAsState()
     val totalStok by viewModel.totalStok.collectAsState()
@@ -489,9 +493,9 @@ fun LaporanScreen(
             }
 
             val bytes = when (format) {
-                "CSV" -> generateCsvBytes(title, headers, rows)
-                "Excel" -> generateExcelBytes(title, headers, rows)
-                else -> generatePdfBytes(context, title, "$startDateText s/d $endDateText", headers, rows)
+                "CSV" -> generateCsvBytes(title, headers, rows, kopState)
+                "Excel" -> generateExcelBytes(title, headers, rows, kopState)
+                else -> generatePdfBytes(context, title, "$startDateText s/d $endDateText", headers, rows, kopState)
             }
 
             val mimeType = when (format) {
@@ -641,6 +645,19 @@ fun LaporanScreen(
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Normal,
                                     color = androidx.compose.ui.graphics.Color(0xFF1E293B)
+                                )
+                            }
+                            IconButton(
+                                onClick = onNavigateToKopLaporan,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("kop_laporan_action_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Description,
+                                    contentDescription = "Pengaturan Kop Laporan",
+                                    tint = androidx.compose.ui.graphics.Color(0xFF6D28D9),
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
@@ -5039,13 +5056,34 @@ fun openFile(context: Context, uri: android.net.Uri, mimeType: String) {
 // ==========================================
 // NATIVE FORMAT GENERATORS (CSV, EXCEL, PDF)
 // ==========================================
-fun generateCsvBytes(title: String, headers: List<String>, rows: List<List<String>>): ByteArray {
+fun generateCsvBytes(title: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
     val bos = java.io.ByteArrayOutputStream()
     bos.write(0xEF)
     bos.write(0xBB)
     bos.write(0xBF) // UTF-8 BOM
     val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(bos, Charsets.UTF_8))
     
+    kopLaporan?.let { kop ->
+        val order = parseKopRowOrder(kop.rowOrder)
+        for (key in order) {
+            val text = when (key) {
+                "pemprov" -> kop.pemprovHeader
+                "dinas" -> kop.dinasHeader
+                "sekolah1" -> kop.sekolahBaris1
+                "sekolah2" -> kop.sekolahBaris2
+                "alamat1" -> kop.alamatBaris1
+                "alamat2" -> kop.alamatBaris2
+                "alamat3" -> kop.alamatBaris3
+                "lainnya" -> kop.lainnyaHeader
+                else -> ""
+            }
+            if (text.isNotBlank()) {
+                writer.write("\"${text.replace("\"", "\"\"")}\"\n")
+            }
+        }
+        writer.write("\n")
+    }
+
     writer.write("\"$title\"\n\n")
     writer.write(headers.joinToString(separator = ",") { "\"${it.replace("\"", "\"\"")}\"" } + "\n")
     rows.forEach { row ->
@@ -5055,7 +5093,7 @@ fun generateCsvBytes(title: String, headers: List<String>, rows: List<List<Strin
     return bos.toByteArray()
 }
 
-fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<String>>): ByteArray {
+fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
     val bos = java.io.ByteArrayOutputStream()
     bos.write(0xEF)
     bos.write(0xBB)
@@ -5063,6 +5101,27 @@ fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<Str
     val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(bos, Charsets.UTF_8))
     
     writer.write("sep=;\n") // Force Excel semicolon recognition
+    kopLaporan?.let { kop ->
+        val order = parseKopRowOrder(kop.rowOrder)
+        for (key in order) {
+            val text = when (key) {
+                "pemprov" -> kop.pemprovHeader
+                "dinas" -> kop.dinasHeader
+                "sekolah1" -> kop.sekolahBaris1
+                "sekolah2" -> kop.sekolahBaris2
+                "alamat1" -> kop.alamatBaris1
+                "alamat2" -> kop.alamatBaris2
+                "alamat3" -> kop.alamatBaris3
+                "lainnya" -> kop.lainnyaHeader
+                else -> ""
+            }
+            if (text.isNotBlank()) {
+                writer.write("\"${text.replace("\"", "\"\"")}\";\n")
+            }
+        }
+        writer.write("\n")
+    }
+
     writer.write("\"$title\";\n\n")
     writer.write(headers.joinToString(separator = ";") { "\"${it.replace("\"", "\"\"")}\"" } + "\n")
     rows.forEach { row ->
@@ -5077,7 +5136,8 @@ fun generatePdfBytes(
     title: String,
     period: String,
     headers: List<String>,
-    rows: List<List<String>>
+    rows: List<List<String>>,
+    kopLaporan: KopLaporanEntity? = null
 ): ByteArray {
     val pdfDocument = android.graphics.pdf.PdfDocument()
     
@@ -5097,14 +5157,14 @@ fun generatePdfBytes(
     
     val paintHeader = android.graphics.Paint().apply {
         color = android.graphics.Color.parseColor("#3B0764") // DeepPurpleText
-        textSize = 14f
+        textSize = 13f
         isFakeBoldText = true
         isAntiAlias = true
     }
     
     val paintSub = android.graphics.Paint().apply {
         color = android.graphics.Color.DKGRAY
-        textSize = 9.5f
+        textSize = 9f
         isAntiAlias = true
     }
     
@@ -5129,13 +5189,92 @@ fun generatePdfBytes(
         color = android.graphics.Color.parseColor("#FAF5FF")
     }
 
-    var y = 50f
+    var y = 35f
+
+    // Draw Kop Laporan Header if provided
+    val kop = kopLaporan ?: KopLaporanEntity()
     
+    // Draw Logo Kiri
+    if (kop.logoKiriPath.isNotBlank() && java.io.File(kop.logoKiriPath).exists()) {
+        try {
+            val bmp = android.graphics.BitmapFactory.decodeFile(kop.logoKiriPath)
+            if (bmp != null) {
+                val destRect = android.graphics.RectF(40f, y, 92f, y + 52f)
+                canvas.drawBitmap(bmp, null, destRect, null)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PDF", "Error drawing logo kiri", e)
+        }
+    }
+
+    // Draw Logo Kanan
+    if (kop.logoKananPath.isNotBlank() && java.io.File(kop.logoKananPath).exists()) {
+        try {
+            val bmp = android.graphics.BitmapFactory.decodeFile(kop.logoKananPath)
+            if (bmp != null) {
+                val destRect = android.graphics.RectF(503f, y, 555f, y + 52f)
+                canvas.drawBitmap(bmp, null, destRect, null)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PDF", "Error drawing logo kanan", e)
+        }
+    }
+
+    // Draw Kop Text Lines (Centered) according to rowOrder
+    val textCenterX = pageWidth / 2f
+
+    fun drawKopTextLine(text: String, fontSizePt: Int, isBold: Boolean) {
+        if (text.isBlank()) return
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = fontSizePt * 0.72f
+            isFakeBoldText = isBold
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = android.graphics.Typeface.SERIF
+        }
+        canvas.drawText(text, textCenterX, y + (fontSizePt * 0.72f), paint)
+        y += (fontSizePt * 0.72f) + 2.5f
+    }
+
+    val orderedKeys = parseKopRowOrder(kop.rowOrder)
+    for (key in orderedKeys) {
+        when (key) {
+            "pemprov" -> drawKopTextLine(kop.pemprovHeader.uppercase(), kop.pemprovFontSize, true)
+            "dinas" -> drawKopTextLine(kop.dinasHeader.uppercase(), kop.dinasFontSize, true)
+            "sekolah1" -> drawKopTextLine(kop.sekolahBaris1.uppercase(), kop.sekolahBaris1FontSize, true)
+            "sekolah2" -> drawKopTextLine(kop.sekolahBaris2.uppercase(), kop.sekolahBaris2FontSize, true)
+            "alamat1" -> drawKopTextLine(kop.alamatBaris1, kop.alamatBaris1FontSize, false)
+            "alamat2" -> drawKopTextLine(kop.alamatBaris2, kop.alamatBaris2FontSize, false)
+            "alamat3" -> drawKopTextLine(kop.alamatBaris3, kop.alamatBaris3FontSize, false)
+            "lainnya" -> drawKopTextLine(kop.lainnyaHeader, kop.lainnyaFontSize, false)
+        }
+    }
+
+    y += 3f
+
+    // Draw Kedinasan Double Line Separator
+    val paintThickLine = android.graphics.Paint().apply {
+        color = android.graphics.Color.BLACK
+        strokeWidth = 2.0f
+        style = android.graphics.Paint.Style.STROKE
+    }
+    val paintThinLine = android.graphics.Paint().apply {
+        color = android.graphics.Color.BLACK
+        strokeWidth = 0.8f
+        style = android.graphics.Paint.Style.STROKE
+    }
+
+    canvas.drawLine(40f, y, 555f, y, paintThickLine)
+    y += 3f
+    canvas.drawLine(40f, y, 555f, y, paintThinLine)
+    y += 18f
+
     // Header Title
     canvas.drawText(title, 40f, y, paintHeader)
-    y += 18f
+    y += 16f
     canvas.drawText("Periode: $period", 40f, y, paintSub)
-    y += 30f
+    y += 24f
     
     // Columns distribution widths
     val colWidths = floatArrayOf(110f, 40f, 40f, 110f, 70f, 65f, 80f)

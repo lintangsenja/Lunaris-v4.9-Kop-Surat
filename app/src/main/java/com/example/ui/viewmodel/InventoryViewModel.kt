@@ -8,6 +8,8 @@ import com.example.data.database.AppDatabase
 import com.example.data.entity.ItemEntity
 import com.example.data.entity.UserEntity
 import com.example.data.entity.MutasiPerangkatEntity
+import com.example.data.entity.KopLaporanEntity
+import com.example.data.entity.RecentKopEntity
 import com.example.data.entity.LoanItemEntity
 import com.example.data.entity.LoanTransactionEntity
 import com.example.data.model.ItemWithStock
@@ -1301,6 +1303,33 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     val mutasiPerangkatList: StateFlow<List<MutasiPerangkatEntity>> = repository.allMutasiPerangkat
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val kopLaporan: StateFlow<KopLaporanEntity> = repository.getKopLaporanFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), KopLaporanEntity())
+
+    val recentKopList: StateFlow<List<RecentKopEntity>> = repository.getRecentKopListFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun saveKopLaporan(kop: KopLaporanEntity, saveToHistory: Boolean = true, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.saveKopLaporan(kop, saveToHistory)
+                onComplete()
+            } catch (e: Exception) {
+                Log.e("InventoryVM", "Error saving kop laporan", e)
+            }
+        }
+    }
+
+    fun deleteRecentKop(id: Int) {
+        viewModelScope.launch {
+            try {
+                repository.deleteRecentKop(id)
+            } catch (e: Exception) {
+                Log.e("InventoryVM", "Error deleting recent kop", e)
+            }
+        }
+    }
 
     // Support for direct reactive Bahan operations requested by the user
     private val _allBahan = MutableStateFlow<List<ItemWithStock>>(emptyList())

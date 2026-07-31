@@ -26,6 +26,7 @@ import com.example.ui.screens.BackupScreen
 import com.example.ui.screens.StokOpnameScreen
 import com.example.ui.screens.ScanQrScreen
 import com.example.ui.screens.UserManagementScreen
+import com.example.ui.screens.KopLaporanScreen
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import androidx.compose.animation.AnimatedVisibility
@@ -264,6 +265,7 @@ class MainActivity : ComponentActivity() {
                                         "Stok Peripheral", "stok_peripheral", "menu_stok_peripheral" -> "stok_peripheral"
                                         "LabKom", "menu_labkom", "Laboratorium", "labkom" -> "labkom"
                                         "Mutasi Perangkat", "mutasi_perangkat", "menu_mutasi_perangkat" -> "mutasi_perangkat"
+                                        "Kop Laporan", "kop_laporan", "menu_kop_laporan" -> "kop_laporan"
                                         "Profil" -> "profil"
                                         else -> "dashboard"
                                     }
@@ -432,6 +434,13 @@ class MainActivity : ComponentActivity() {
                         }
                         composable("laporan") {
                             LaporanScreen(
+                                viewModel = inventoryViewModel,
+                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateToKopLaporan = { navController.navigate("kop_laporan") }
+                            )
+                        }
+                        composable("kop_laporan") {
+                            KopLaporanScreen(
                                 viewModel = inventoryViewModel,
                                 onNavigateBack = { navController.popBackStack() }
                             )

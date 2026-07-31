@@ -21,6 +21,8 @@ import com.example.data.entity.PeripheralEntity
 import com.example.data.entity.PeripheralRusakEntity
 import com.example.data.entity.PeripheralStockEntity
 import com.example.data.entity.MutasiPerangkatEntity
+import com.example.data.entity.KopLaporanEntity
+import com.example.data.entity.RecentKopEntity
 
 @Database(
     entities = [
@@ -37,9 +39,11 @@ import com.example.data.entity.MutasiPerangkatEntity
         PeripheralEntity::class,
         PeripheralRusakEntity::class,
         PeripheralStockEntity::class,
-        MutasiPerangkatEntity::class
+        MutasiPerangkatEntity::class,
+        KopLaporanEntity::class,
+        RecentKopEntity::class
     ],
-    version = 23,
+    version = 25,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -70,7 +74,9 @@ abstract class AppDatabase : RoomDatabase() {
                 "peripherals" to "CREATE TABLE IF NOT EXISTS `peripherals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `isDemo` INTEGER NOT NULL DEFAULT 0)",
                 "peripheral_rusak" to "CREATE TABLE IF NOT EXISTS `peripheral_rusak` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `idBarang` TEXT NOT NULL, `namaBarang` TEXT NOT NULL, `subKategori` TEXT NOT NULL DEFAULT '🔌 Peripheral Lainnya', `jumlah` INTEGER NOT NULL DEFAULT 1, `tanggalKerusakan` TEXT NOT NULL DEFAULT '', `waktuKerusakan` TEXT NOT NULL DEFAULT '', `keteranganKerusakan` TEXT NOT NULL DEFAULT '', `namaPetugas` TEXT NOT NULL DEFAULT '', `statusDiagnosa` TEXT NOT NULL DEFAULT 'Perlu Diagnosa', `status` TEXT NOT NULL DEFAULT 'Rusak (Perlu Tindakan)', `validationCount` INTEGER NOT NULL DEFAULT 0, `lastValidatedDate` TEXT NOT NULL DEFAULT '', `lastValidatedBy` TEXT NOT NULL DEFAULT '', `validationNotes` TEXT NOT NULL DEFAULT '', `isHibah` INTEGER NOT NULL DEFAULT 0, `penerimaHibah` TEXT NOT NULL DEFAULT '', `alasanHibah` TEXT NOT NULL DEFAULT '', `isDemo` INTEGER NOT NULL DEFAULT 0)",
                 "peripheral_stocks" to "CREATE TABLE IF NOT EXISTS `peripheral_stocks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `idBarang` TEXT NOT NULL, `jenisPeripheral` TEXT NOT NULL, `namaItem` TEXT NOT NULL, `merek` TEXT NOT NULL DEFAULT '', `spesifikasi` TEXT NOT NULL DEFAULT '', `satuan` TEXT NOT NULL DEFAULT 'Unit', `jumlah` INTEGER NOT NULL DEFAULT 0, `tanggalMasuk` TEXT NOT NULL DEFAULT '', `sumberDana` TEXT NOT NULL DEFAULT '', `lokasiRuang` TEXT NOT NULL DEFAULT '', `kondisi` TEXT NOT NULL DEFAULT 'Baik', `serialNumber` TEXT NOT NULL DEFAULT '', `catatanModifikasi` TEXT NOT NULL DEFAULT '', `usedCount` INTEGER NOT NULL DEFAULT 0, `usedPCNotes` TEXT NOT NULL DEFAULT '', `isDemo` INTEGER NOT NULL DEFAULT 0)",
-                "mutasi_perangkat" to "CREATE TABLE IF NOT EXISTS `mutasi_perangkat` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `idMutasi` TEXT NOT NULL DEFAULT '', `idBarang` TEXT NOT NULL DEFAULT '', `namaBarang` TEXT NOT NULL DEFAULT '', `serialNumber` TEXT NOT NULL DEFAULT '', `jenisPerangkat` TEXT NOT NULL DEFAULT 'PERIPHERAL', `ruangAsal` TEXT NOT NULL DEFAULT '', `ruangTujuan` TEXT NOT NULL DEFAULT '', `tanggalMutasi` TEXT NOT NULL DEFAULT '', `namaPetugas` TEXT NOT NULL DEFAULT '', `alasanMutasi` TEXT NOT NULL DEFAULT '', `keterangan` TEXT NOT NULL DEFAULT '', `isDemo` INTEGER NOT NULL DEFAULT 0)"
+                "mutasi_perangkat" to "CREATE TABLE IF NOT EXISTS `mutasi_perangkat` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `idMutasi` TEXT NOT NULL DEFAULT '', `idBarang` TEXT NOT NULL DEFAULT '', `namaBarang` TEXT NOT NULL DEFAULT '', `serialNumber` TEXT NOT NULL DEFAULT '', `jenisPerangkat` TEXT NOT NULL DEFAULT 'PERIPHERAL', `ruangAsal` TEXT NOT NULL DEFAULT '', `ruangTujuan` TEXT NOT NULL DEFAULT '', `tanggalMutasi` TEXT NOT NULL DEFAULT '', `namaPetugas` TEXT NOT NULL DEFAULT '', `alasanMutasi` TEXT NOT NULL DEFAULT '', `keterangan` TEXT NOT NULL DEFAULT '', `isDemo` INTEGER NOT NULL DEFAULT 0)",
+                "kop_laporan" to "CREATE TABLE IF NOT EXISTS `kop_laporan` (`id` INTEGER PRIMARY KEY NOT NULL DEFAULT 1, `pemprovHeader` TEXT NOT NULL DEFAULT 'PEMERINTAH PROVINSI JAWA TENGAH', `pemprovFontSize` INTEGER NOT NULL DEFAULT 14, `dinasHeader` TEXT NOT NULL DEFAULT 'DINAS PENDIDIKAN DAN KEBUDAYAAN', `dinasFontSize` INTEGER NOT NULL DEFAULT 12, `sekolahBaris1` TEXT NOT NULL DEFAULT 'SEKOLAH MENENGAH ATAS NEGERI 1 BOBOTSARI', `sekolahBaris1FontSize` INTEGER NOT NULL DEFAULT 16, `sekolahBaris2` TEXT NOT NULL DEFAULT 'KABUPATEN PURBALINGGA', `sekolahBaris2FontSize` INTEGER NOT NULL DEFAULT 16, `alamatBaris1` TEXT NOT NULL DEFAULT 'Jalan Raya Bobotsari No. 1, Bobotsari, Purbalingga 53353', `alamatBaris1FontSize` INTEGER NOT NULL DEFAULT 10, `alamatBaris2` TEXT NOT NULL DEFAULT 'Telepon (0281) 759021 | Email: sman1bobotsari@yahoo.co.id', `alamatBaris2FontSize` INTEGER NOT NULL DEFAULT 10, `alamatBaris3` TEXT NOT NULL DEFAULT 'Website: www.sman1bobotsari.sch.id', `alamatBaris3FontSize` INTEGER NOT NULL DEFAULT 10, `lainnyaHeader` TEXT NOT NULL DEFAULT '', `lainnyaFontSize` INTEGER NOT NULL DEFAULT 10, `logoKiriPath` TEXT NOT NULL DEFAULT '', `logoKananPath` TEXT NOT NULL DEFAULT '', `rowOrder` TEXT NOT NULL DEFAULT 'pemprov,dinas,sekolah1,sekolah2,alamat1,alamat2,alamat3,lainnya')",
+                "recent_kop" to "CREATE TABLE IF NOT EXISTS `recent_kop` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL DEFAULT '', `pemprovHeader` TEXT NOT NULL DEFAULT '', `pemprovFontSize` INTEGER NOT NULL DEFAULT 14, `dinasHeader` TEXT NOT NULL DEFAULT '', `dinasFontSize` INTEGER NOT NULL DEFAULT 12, `sekolahBaris1` TEXT NOT NULL DEFAULT '', `sekolahBaris1FontSize` INTEGER NOT NULL DEFAULT 16, `sekolahBaris2` TEXT NOT NULL DEFAULT '', `sekolahBaris2FontSize` INTEGER NOT NULL DEFAULT 16, `alamatBaris1` TEXT NOT NULL DEFAULT '', `alamatBaris1FontSize` INTEGER NOT NULL DEFAULT 10, `alamatBaris2` TEXT NOT NULL DEFAULT '', `alamatBaris2FontSize` INTEGER NOT NULL DEFAULT 10, `alamatBaris3` TEXT NOT NULL DEFAULT '', `alamatBaris3FontSize` INTEGER NOT NULL DEFAULT 10, `lainnyaHeader` TEXT NOT NULL DEFAULT '', `lainnyaFontSize` INTEGER NOT NULL DEFAULT 10, `rowOrder` TEXT NOT NULL DEFAULT 'pemprov,dinas,sekolah1,sekolah2,alamat1,alamat2,alamat3,lainnya', `timestamp` INTEGER NOT NULL DEFAULT 0)"
             )
 
             val tablesWithColumns = mapOf(
@@ -249,6 +255,50 @@ abstract class AppDatabase : RoomDatabase() {
                     "fullName" to "TEXT NOT NULL DEFAULT ''",
                     "createdAt" to "INTEGER NOT NULL DEFAULT 0",
                     "photoUrl" to "TEXT NOT NULL DEFAULT ''"
+                ),
+                "kop_laporan" to listOf(
+                    "id" to "INTEGER PRIMARY KEY NOT NULL DEFAULT 1",
+                    "pemprovHeader" to "TEXT NOT NULL DEFAULT ''",
+                    "pemprovFontSize" to "INTEGER NOT NULL DEFAULT 14",
+                    "dinasHeader" to "TEXT NOT NULL DEFAULT ''",
+                    "dinasFontSize" to "INTEGER NOT NULL DEFAULT 12",
+                    "sekolahBaris1" to "TEXT NOT NULL DEFAULT ''",
+                    "sekolahBaris1FontSize" to "INTEGER NOT NULL DEFAULT 16",
+                    "sekolahBaris2" to "TEXT NOT NULL DEFAULT ''",
+                    "sekolahBaris2FontSize" to "INTEGER NOT NULL DEFAULT 16",
+                    "alamatBaris1" to "TEXT NOT NULL DEFAULT ''",
+                    "alamatBaris1FontSize" to "INTEGER NOT NULL DEFAULT 10",
+                    "alamatBaris2" to "TEXT NOT NULL DEFAULT ''",
+                    "alamatBaris2FontSize" to "INTEGER NOT NULL DEFAULT 10",
+                    "alamatBaris3" to "TEXT NOT NULL DEFAULT ''",
+                    "alamatBaris3FontSize" to "INTEGER NOT NULL DEFAULT 10",
+                    "lainnyaHeader" to "TEXT NOT NULL DEFAULT ''",
+                    "lainnyaFontSize" to "INTEGER NOT NULL DEFAULT 10",
+                    "logoKiriPath" to "TEXT NOT NULL DEFAULT ''",
+                    "logoKananPath" to "TEXT NOT NULL DEFAULT ''",
+                    "rowOrder" to "TEXT NOT NULL DEFAULT 'pemprov,dinas,sekolah1,sekolah2,alamat1,alamat2,alamat3,lainnya'"
+                ),
+                "recent_kop" to listOf(
+                    "id" to "INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL",
+                    "title" to "TEXT NOT NULL DEFAULT ''",
+                    "pemprovHeader" to "TEXT NOT NULL DEFAULT ''",
+                    "pemprovFontSize" to "INTEGER NOT NULL DEFAULT 14",
+                    "dinasHeader" to "TEXT NOT NULL DEFAULT ''",
+                    "dinasFontSize" to "INTEGER NOT NULL DEFAULT 12",
+                    "sekolahBaris1" to "TEXT NOT NULL DEFAULT ''",
+                    "sekolahBaris1FontSize" to "INTEGER NOT NULL DEFAULT 16",
+                    "sekolahBaris2" to "TEXT NOT NULL DEFAULT ''",
+                    "sekolahBaris2FontSize" to "INTEGER NOT NULL DEFAULT 16",
+                    "alamatBaris1" to "TEXT NOT NULL DEFAULT ''",
+                    "alamatBaris1FontSize" to "INTEGER NOT NULL DEFAULT 10",
+                    "alamatBaris2" to "TEXT NOT NULL DEFAULT ''",
+                    "alamatBaris2FontSize" to "INTEGER NOT NULL DEFAULT 10",
+                    "alamatBaris3" to "TEXT NOT NULL DEFAULT ''",
+                    "alamatBaris3FontSize" to "INTEGER NOT NULL DEFAULT 10",
+                    "lainnyaHeader" to "TEXT NOT NULL DEFAULT ''",
+                    "lainnyaFontSize" to "INTEGER NOT NULL DEFAULT 10",
+                    "rowOrder" to "TEXT NOT NULL DEFAULT 'pemprov,dinas,sekolah1,sekolah2,alamat1,alamat2,alamat3,lainnya'",
+                    "timestamp" to "INTEGER NOT NULL DEFAULT 0"
                 )
             )
 
@@ -317,10 +367,12 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val migrations = (1..20).map { start ->
-                    object : Migration(start, 21) {
-                        override fun migrate(database: SupportSQLiteDatabase) {
-                            migrateDatabaseToLatest(database)
+                val migrations = (1..30).flatMap { start ->
+                    (start + 1..31).map { end ->
+                        object : Migration(start, end) {
+                            override fun migrate(database: SupportSQLiteDatabase) {
+                                migrateDatabaseToLatest(database)
+                            }
                         }
                     }
                 }.toTypedArray()
@@ -331,6 +383,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "gudang_sman_database"
                 )
                     .addMigrations(*migrations)
+                    .fallbackToDestructiveMigration()
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)

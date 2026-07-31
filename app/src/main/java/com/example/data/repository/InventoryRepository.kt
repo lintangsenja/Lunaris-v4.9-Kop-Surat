@@ -15,6 +15,8 @@ import com.example.data.entity.MutasiPerangkatEntity
 import com.example.data.entity.DamagedItemEntity
 import com.example.data.entity.PeripheralStockEntity
 import com.example.data.entity.UserEntity
+import com.example.data.entity.KopLaporanEntity
+import com.example.data.entity.RecentKopEntity
 import com.example.data.model.ItemWithStock
 import com.example.data.network.GoogleSheetsSyncService
 import com.google.firebase.firestore.FirebaseFirestore
@@ -1072,5 +1074,52 @@ class InventoryRepository(
         } catch (e: Exception) {
             Log.e("InventoryRepo", "Error updating peripheral stock usage in Firestore", e)
         }
+    }
+
+    // Kop Laporan Methods
+    fun getKopLaporanFlow(): Flow<KopLaporanEntity> {
+        return inventoryDao?.getKopLaporanFlow()?.map { it ?: KopLaporanEntity() }
+            ?: kotlinx.coroutines.flow.flowOf(KopLaporanEntity())
+    }
+
+    suspend fun getKopLaporanSync(): KopLaporanEntity {
+        return inventoryDao?.getKopLaporanSync() ?: KopLaporanEntity()
+    }
+
+    suspend fun saveKopLaporan(kop: KopLaporanEntity, saveToHistory: Boolean = true) {
+        inventoryDao?.saveKopLaporan(kop)
+        if (saveToHistory) {
+            val title = kop.sekolahBaris1.ifBlank { "Kop Laporan" }
+            val recent = RecentKopEntity(
+                title = title,
+                pemprovHeader = kop.pemprovHeader,
+                pemprovFontSize = kop.pemprovFontSize,
+                dinasHeader = kop.dinasHeader,
+                dinasFontSize = kop.dinasFontSize,
+                sekolahBaris1 = kop.sekolahBaris1,
+                sekolahBaris1FontSize = kop.sekolahBaris1FontSize,
+                sekolahBaris2 = kop.sekolahBaris2,
+                sekolahBaris2FontSize = kop.sekolahBaris2FontSize,
+                alamatBaris1 = kop.alamatBaris1,
+                alamatBaris1FontSize = kop.alamatBaris1FontSize,
+                alamatBaris2 = kop.alamatBaris2,
+                alamatBaris2FontSize = kop.alamatBaris2FontSize,
+                alamatBaris3 = kop.alamatBaris3,
+                alamatBaris3FontSize = kop.alamatBaris3FontSize,
+                lainnyaHeader = kop.lainnyaHeader,
+                lainnyaFontSize = kop.lainnyaFontSize,
+                rowOrder = kop.rowOrder,
+                timestamp = System.currentTimeMillis()
+            )
+            inventoryDao?.insertRecentKop(recent)
+        }
+    }
+
+    fun getRecentKopListFlow(): Flow<List<RecentKopEntity>> {
+        return inventoryDao?.getRecentKopListFlow() ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }
+
+    suspend fun deleteRecentKop(id: Int) {
+        inventoryDao?.deleteRecentKop(id)
     }
 }

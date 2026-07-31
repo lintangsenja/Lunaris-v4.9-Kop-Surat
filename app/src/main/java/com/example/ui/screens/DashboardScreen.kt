@@ -1087,7 +1087,8 @@ fun DashboardScreen(
 
         val analisisMenus = remember(userRole, studentPermissions) {
             listOf(
-                DashboardMenuData("Laporan", "Unduh laporan & rekapan", Icons.Default.Assessment, Color(0xFF06B6D4), Color(0xFFECFEFF), "menu_laporan", "Laporan")
+                DashboardMenuData("Laporan", "Unduh laporan & rekapan", Icons.Default.Assessment, Color(0xFF06B6D4), Color(0xFFECFEFF), "menu_laporan", "Laporan"),
+                DashboardMenuData("Kop Laporan", "Pengaturan header & logo kop surat", Icons.Default.Assignment, Color(0xFF8B5CF6), Color(0xFFF5F3FF), "menu_kop_laporan", "Kop Laporan")
             ).filter { isMenuAllowedForSiswa(it.route) }
         }
 
