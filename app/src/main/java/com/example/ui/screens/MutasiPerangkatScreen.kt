@@ -58,7 +58,7 @@ fun MutasiPerangkatScreen(
     val ruangList by viewModel.ruang.collectAsState()
 
     val masterRooms = remember(ruangList) {
-        ruangList.distinct().filter { it.isNotBlank() }
+        ruangList.map { it.trim() }.filter { it.isNotBlank() }.distinct().sorted()
     }
 
     val masterConditions = remember(kondisiList) {
@@ -840,8 +840,10 @@ private fun AddMutasiDialog(
     var selectedDeviceSn by remember { mutableStateOf("") }
     var selectedDeviceType by remember { mutableStateOf("PERIPHERAL") } // PERIPHERAL, LABKOM, ALAT
     var kondisiSebelumPindah by remember { mutableStateOf(masterConditions.firstOrNull() ?: "") }
-    var ruangAsal by remember { mutableStateOf(masterRooms.firstOrNull() ?: "") }
-    var ruangTujuan by remember { mutableStateOf(masterRooms.firstOrNull() ?: "") }
+    var ruangAsal by remember { mutableStateOf("") }
+    var isCustomRuangAsal by remember { mutableStateOf(false) }
+    var customRuangAsalText by remember { mutableStateOf("") }
+    var ruangTujuan by remember { mutableStateOf("") }
     var isCustomRuangTujuan by remember { mutableStateOf(false) }
     var customRuangTujuanText by remember { mutableStateOf("") }
     var tanggalMutasi by remember { mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale("id", "ID")).format(Date())) }
@@ -1176,38 +1178,110 @@ private fun AddMutasiDialog(
 
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
-                                value = ruangAsal.ifBlank { "Pilih Ruang Asal" },
+                                value = if (isCustomRuangAsal) "Lainnya (Input Manual)" else ruangAsal.ifBlank { "Pilih Ruang Asal" },
                                 onValueChange = {},
                                 readOnly = true,
+                                enabled = false,
                                 label = { Text("Ruang Asal (Penempatan Saat Ini)", fontSize = 11.sp) },
                                 leadingIcon = { Icon(Icons.Default.Place, contentDescription = null, tint = Color(0xFF7C3AED)) },
                                 trailingIcon = {
-                                    IconButton(onClick = { isRuangAsalDropdownExpanded = true }) {
-                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Pilih Ruang Asal")
-                                    }
+                                    Icon(
+                                        imageVector = if (isRuangAsalDropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                        contentDescription = "Pilih Ruang Asal",
+                                        tint = Color(0xFF7C3AED)
+                                    )
                                 },
                                 shape = RoundedCornerShape(12.dp),
-                                colors = customTextFieldColors,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    disabledTextColor = Color(0xFF1E293B),
+                                    disabledBorderColor = Color(0xFFCBD5E1),
+                                    disabledLabelColor = Color(0xFF64748B),
+                                    disabledLeadingIconColor = Color(0xFF7C3AED),
+                                    disabledTrailingIconColor = Color(0xFF7C3AED),
+                                    disabledContainerColor = Color.White
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { isRuangAsalDropdownExpanded = true }
                                     .testTag("input_ruang_asal")
+                            )
+
+                            // Clickable transparent overlay covering entire field
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clickable { isRuangAsalDropdownExpanded = !isRuangAsalDropdownExpanded }
                             )
 
                             DropdownMenu(
                                 expanded = isRuangAsalDropdownExpanded,
-                                onDismissRequest = { isRuangAsalDropdownExpanded = false }
+                                onDismissRequest = { isRuangAsalDropdownExpanded = false },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .heightIn(max = 260.dp)
                             ) {
-                                masterRooms.forEach { room ->
+                                if (masterRooms.isEmpty()) {
                                     DropdownMenuItem(
-                                        text = { Text(room, fontSize = 12.sp) },
-                                        onClick = {
-                                            ruangAsal = room
-                                            isRuangAsalDropdownExpanded = false
-                                        }
+                                        text = { Text("Tidak ada master ruang. Silakan isi manual.", fontSize = 12.sp, color = Color.Gray) },
+                                        onClick = { isRuangAsalDropdownExpanded = false }
                                     )
+                                } else {
+                                    masterRooms.forEach { room ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Place,
+                                                        contentDescription = null,
+                                                        tint = if (!isCustomRuangAsal && room == ruangAsal) Color(0xFF7C3AED) else Color(0xFF64748B),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = room,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = if (!isCustomRuangAsal && room == ruangAsal) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (!isCustomRuangAsal && room == ruangAsal) Color(0xFF7C3AED) else Color(0xFF1E293B)
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                ruangAsal = room
+                                                isCustomRuangAsal = false
+                                                isRuangAsalDropdownExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("+ Lokasi / Ruang Asal Lainnya...", fontWeight = FontWeight.Bold, color = Color(0xFF7C3AED), fontSize = 12.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        isCustomRuangAsal = true
+                                        isRuangAsalDropdownExpanded = false
+                                    }
+                                )
                             }
+                        }
+
+                        if (isCustomRuangAsal) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = customRuangAsalText,
+                                onValueChange = { customRuangAsalText = it },
+                                label = { Text("Nama Ruang Asal Kustom", fontSize = 11.sp) },
+                                placeholder = { Text("Contoh: Ruang Server / Gudang Barat", fontSize = 11.sp) },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = customTextFieldColors,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("input_custom_ruang_asal")
+                            )
                         }
                     }
 
@@ -1221,37 +1295,86 @@ private fun AddMutasiDialog(
                                 value = if (isCustomRuangTujuan) "Lainnya (Input Manual)" else ruangTujuan.ifBlank { "Pilih Ruang Tujuan" },
                                 onValueChange = {},
                                 readOnly = true,
+                                enabled = false,
                                 label = { Text("Ruang / Lokasi Tujuan", fontSize = 11.sp) },
                                 leadingIcon = { Icon(Icons.Default.MeetingRoom, contentDescription = null, tint = Color(0xFF7C3AED)) },
                                 trailingIcon = {
-                                    IconButton(onClick = { isRoomDropdownExpanded = true }) {
-                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Pilih Ruangan")
-                                    }
+                                    Icon(
+                                        imageVector = if (isRoomDropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                        contentDescription = "Pilih Ruangan",
+                                        tint = Color(0xFF7C3AED)
+                                    )
                                 },
                                 shape = RoundedCornerShape(12.dp),
-                                colors = customTextFieldColors,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    disabledTextColor = Color(0xFF1E293B),
+                                    disabledBorderColor = Color(0xFFCBD5E1),
+                                    disabledLabelColor = Color(0xFF64748B),
+                                    disabledLeadingIconColor = Color(0xFF7C3AED),
+                                    disabledTrailingIconColor = Color(0xFF7C3AED),
+                                    disabledContainerColor = Color.White
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { isRoomDropdownExpanded = true }
                                     .testTag("input_ruang_tujuan")
+                            )
+
+                            // Clickable transparent overlay covering entire field
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clickable { isRoomDropdownExpanded = !isRoomDropdownExpanded }
                             )
 
                             DropdownMenu(
                                 expanded = isRoomDropdownExpanded,
-                                onDismissRequest = { isRoomDropdownExpanded = false }
+                                onDismissRequest = { isRoomDropdownExpanded = false },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .heightIn(max = 260.dp)
                             ) {
-                                masterRooms.forEach { room ->
+                                if (masterRooms.isEmpty()) {
                                     DropdownMenuItem(
-                                        text = { Text(room, fontSize = 12.sp) },
-                                        onClick = {
-                                            ruangTujuan = room
-                                            isCustomRuangTujuan = false
-                                            isRoomDropdownExpanded = false
-                                        }
+                                        text = { Text("Tidak ada master ruang. Silakan isi manual.", fontSize = 12.sp, color = Color.Gray) },
+                                        onClick = { isRoomDropdownExpanded = false }
                                     )
+                                } else {
+                                    masterRooms.forEach { room ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.MeetingRoom,
+                                                        contentDescription = null,
+                                                        tint = if (!isCustomRuangTujuan && room == ruangTujuan) Color(0xFF7C3AED) else Color(0xFF64748B),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = room,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = if (!isCustomRuangTujuan && room == ruangTujuan) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (!isCustomRuangTujuan && room == ruangTujuan) Color(0xFF7C3AED) else Color(0xFF1E293B)
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                ruangTujuan = room
+                                                isCustomRuangTujuan = false
+                                                isRoomDropdownExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                 DropdownMenuItem(
-                                    text = { Text("+ Lokasi / Ruang Lainnya...", fontWeight = FontWeight.Bold, color = Color(0xFF7C3AED), fontSize = 12.sp) },
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("+ Lokasi / Ruang Lainnya...", fontWeight = FontWeight.Bold, color = Color(0xFF7C3AED), fontSize = 12.sp)
+                                        }
+                                    },
                                     onClick = {
                                         isCustomRuangTujuan = true
                                         isRoomDropdownExpanded = false
@@ -1269,7 +1392,9 @@ private fun AddMutasiDialog(
                                 placeholder = { Text("Contoh: Ruang Kepala Sekolah / Lab Biologi", fontSize = 11.sp) },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = customTextFieldColors,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("input_custom_ruang_tujuan")
                             )
                         }
                     }
@@ -1364,17 +1489,22 @@ private fun AddMutasiDialog(
 
                     Button(
                         onClick = {
+                            val finalSourceRoom = if (isCustomRuangAsal) customRuangAsalText.trim() else ruangAsal.trim()
                             val finalTargetRoom = if (isCustomRuangTujuan) customRuangTujuanText.trim() else ruangTujuan.trim()
 
                             if (selectedDeviceName.isBlank()) {
                                 Toast.makeText(context, "Harap pilih perangkat yang akan dimutasi!", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
+                            if (finalSourceRoom.isBlank()) {
+                                Toast.makeText(context, "Harap pilih atau isi ruang asal tempat perangkat berada saat ini!", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
                             if (finalTargetRoom.isBlank()) {
                                 Toast.makeText(context, "Harap pilih atau isi ruang tujuan!", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
-                            if (ruangAsal.equals(finalTargetRoom, ignoreCase = true)) {
+                            if (finalSourceRoom.equals(finalTargetRoom, ignoreCase = true)) {
                                 Toast.makeText(context, "Ruang tujuan tidak boleh sama dengan ruang asal!", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
@@ -1390,7 +1520,7 @@ private fun AddMutasiDialog(
                                 selectedDeviceName,
                                 selectedDeviceSn,
                                 selectedDeviceType,
-                                ruangAsal,
+                                finalSourceRoom,
                                 finalTargetRoom,
                                 tanggalMutasi,
                                 namaPetugas,

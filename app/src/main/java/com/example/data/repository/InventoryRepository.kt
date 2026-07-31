@@ -1109,6 +1109,11 @@ class InventoryRepository(
                 lainnyaHeader = kop.lainnyaHeader,
                 lainnyaFontSize = kop.lainnyaFontSize,
                 rowOrder = kop.rowOrder,
+                kopFontFamily = kop.kopFontFamily,
+                tempatTanggal = kop.tempatTanggal,
+                ttdFontFamily = kop.ttdFontFamily,
+                ttdFontSize = kop.ttdFontSize,
+                ttdSignersJson = kop.ttdSignersJson,
                 timestamp = System.currentTimeMillis()
             )
             inventoryDao?.insertRecentKop(recent)

@@ -1,6 +1,8 @@
 package com.example.ui.screens
 import com.example.data.entity.KopLaporanEntity
 import com.example.data.entity.parseKopRowOrder
+import com.example.data.entity.parseTtdSigners
+import com.example.data.entity.TtdSignerItem
 import com.example.ui.components.LunarisCard
 import com.example.ui.components.CameraScannerDialog
 import com.example.ui.components.LunarisDatePickerDialog
@@ -5089,6 +5091,24 @@ fun generateCsvBytes(title: String, headers: List<String>, rows: List<List<Strin
     rows.forEach { row ->
         writer.write(row.joinToString(separator = ",") { "\"${it.replace("\"", "\"\"")}\"" } + "\n")
     }
+
+    // Append TTD Footer
+    kopLaporan?.let { kop ->
+        val activeSigners = parseTtdSigners(kop.ttdSignersJson).filter { it.isEnabled }
+        if (kop.tempatTanggal.isNotBlank() || activeSigners.isNotEmpty()) {
+            writer.write("\n\n")
+            if (kop.tempatTanggal.isNotBlank()) {
+                writer.write("\"${kop.tempatTanggal.replace("\"", "\"\"")}\"\n")
+            }
+            activeSigners.forEach { signer ->
+                if (signer.jabatan.isNotBlank()) writer.write("\"${signer.jabatan.replace("\"", "\"\"")}\"\n")
+                if (signer.nama.isNotBlank()) writer.write("\"${signer.nama.replace("\"", "\"\"")}\"\n")
+                if (signer.nip.isNotBlank()) writer.write("\"NIP. ${signer.nip.replace("\"", "\"\"")}\"\n")
+                writer.write("\n")
+            }
+        }
+    }
+
     writer.flush()
     return bos.toByteArray()
 }
@@ -5127,6 +5147,24 @@ fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<Str
     rows.forEach { row ->
         writer.write(row.joinToString(separator = ";") { "\"${it.replace("\"", "\"\"")}\"" } + "\n")
     }
+
+    // Append TTD Footer
+    kopLaporan?.let { kop ->
+        val activeSigners = parseTtdSigners(kop.ttdSignersJson).filter { it.isEnabled }
+        if (kop.tempatTanggal.isNotBlank() || activeSigners.isNotEmpty()) {
+            writer.write("\n;\n")
+            if (kop.tempatTanggal.isNotBlank()) {
+                writer.write("\"${kop.tempatTanggal.replace("\"", "\"\"")}\";\n")
+            }
+            activeSigners.forEach { signer ->
+                if (signer.jabatan.isNotBlank()) writer.write("\"${signer.jabatan.replace("\"", "\"\"")}\";\n")
+                if (signer.nama.isNotBlank()) writer.write("\"${signer.nama.replace("\"", "\"\"")}\";\n")
+                if (signer.nip.isNotBlank()) writer.write("\"NIP. ${signer.nip.replace("\"", "\"\"")}\";\n")
+                writer.write(";\n")
+            }
+        }
+    }
+
     writer.flush()
     return bos.toByteArray()
 }
@@ -5223,6 +5261,12 @@ fun generatePdfBytes(
     // Draw Kop Text Lines (Centered) according to rowOrder
     val textCenterX = pageWidth / 2f
 
+    val kopFontTypeface = when (kop.kopFontFamily.uppercase()) {
+        "TIMES NEW ROMAN", "SERIF" -> android.graphics.Typeface.SERIF
+        "COURIER", "MONOSPACE" -> android.graphics.Typeface.MONOSPACE
+        else -> android.graphics.Typeface.SANS_SERIF
+    }
+
     fun drawKopTextLine(text: String, fontSizePt: Int, isBold: Boolean) {
         if (text.isBlank()) return
         val paint = android.graphics.Paint().apply {
@@ -5231,7 +5275,7 @@ fun generatePdfBytes(
             isFakeBoldText = isBold
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.CENTER
-            typeface = android.graphics.Typeface.SERIF
+            typeface = kopFontTypeface
         }
         canvas.drawText(text, textCenterX, y + (fontSizePt * 0.72f), paint)
         y += (fontSizePt * 0.72f) + 2.5f
@@ -5336,6 +5380,131 @@ fun generatePdfBytes(
             canvas.drawText(textToDraw, colPositions[i] + 4f, y + 13f, paintText)
         }
         y += 20f
+    }
+
+    // DRAW FOOTER TTD (SIGNATURE SECTION)
+    val activeSigners = parseTtdSigners(kop.ttdSignersJson).filter { it.isEnabled }
+    val tempatTanggalText = kop.tempatTanggal.trim()
+
+    if (activeSigners.isNotEmpty() || tempatTanggalText.isNotBlank()) {
+        val ttdFontTypeface = when (kop.ttdFontFamily.uppercase()) {
+            "TIMES NEW ROMAN", "SERIF" -> android.graphics.Typeface.SERIF
+            "COURIER", "MONOSPACE" -> android.graphics.Typeface.MONOSPACE
+            else -> android.graphics.Typeface.SANS_SERIF
+        }
+        val ttdFontSizePx = (if (kop.ttdFontSize <= 0) 10 else kop.ttdFontSize) * 0.9f
+
+        val paintTtdText = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = ttdFontSizePx
+            isAntiAlias = true
+            typeface = ttdFontTypeface
+        }
+        val paintTtdTextBold = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = ttdFontSizePx
+            isFakeBoldText = true
+            isAntiAlias = true
+            typeface = ttdFontTypeface
+        }
+
+        val neededSpace = if (activeSigners.size > 3) 220f else 120f
+        if (y + neededSpace > pageHeight - 40f) {
+            pdfDocument.finishPage(currentPage)
+            pageNumber++
+            pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+            currentPage = pdfDocument.startPage(pageInfo)
+            canvas = currentPage.canvas
+            y = 50f
+        } else {
+            y += 24f
+        }
+
+        val signersToRender = if (activeSigners.isEmpty()) {
+            listOf(TtdSignerItem(jabatan = "Kepala Sekolah", nama = "", nip = ""))
+        } else activeSigners
+
+        val maxCols = if (signersToRender.size <= 3) signersToRender.size else 2
+        val firstRowSigners = signersToRender.take(maxCols)
+        val secondRowSigners = signersToRender.drop(maxCols)
+
+        fun getXForIndex(idx: Int, totalInRow: Int): Float {
+            return when (totalInRow) {
+                1 -> 360f
+                2 -> if (idx == 0) 40f else 360f
+                3 -> when (idx) {
+                    0 -> 40f
+                    1 -> 200f
+                    else -> 360f
+                }
+                else -> 40f + idx * 160f
+            }
+        }
+
+        val row1StartY = y
+        var maxRow1Y = row1StartY
+
+        firstRowSigners.forEachIndexed { idx, signer ->
+            val colX = getXForIndex(idx, firstRowSigners.size)
+            var currentY = row1StartY
+
+            if (idx == firstRowSigners.size - 1 && tempatTanggalText.isNotBlank()) {
+                canvas.drawText(tempatTanggalText, colX, currentY, paintTtdText)
+                currentY += ttdFontSizePx + 4f
+            } else if (tempatTanggalText.isNotBlank()) {
+                currentY += ttdFontSizePx + 4f
+            }
+
+            if (signer.jabatan.isNotBlank()) {
+                canvas.drawText(signer.jabatan, colX, currentY, paintTtdText)
+                currentY += ttdFontSizePx + 4f
+            }
+
+            currentY += 42f
+
+            if (signer.nama.isNotBlank()) {
+                canvas.drawText(signer.nama, colX, currentY, paintTtdTextBold)
+                val nameWidth = paintTtdTextBold.measureText(signer.nama)
+                canvas.drawLine(colX, currentY + 1.5f, colX + nameWidth, currentY + 1.5f, paintTtdTextBold)
+                currentY += ttdFontSizePx + 4f
+            }
+
+            if (signer.nip.isNotBlank()) {
+                val nipLabel = if (signer.nip.uppercase().startsWith("NIP")) signer.nip else "NIP. ${signer.nip}"
+                canvas.drawText(nipLabel, colX, currentY, paintTtdText)
+                currentY += ttdFontSizePx + 4f
+            }
+
+            if (currentY > maxRow1Y) maxRow1Y = currentY
+        }
+
+        if (secondRowSigners.isNotEmpty()) {
+            val row2StartY = maxRow1Y + 16f
+            secondRowSigners.forEachIndexed { idx, signer ->
+                val colX = getXForIndex(idx, secondRowSigners.size)
+                var currentY = row2StartY
+
+                if (signer.jabatan.isNotBlank()) {
+                    canvas.drawText(signer.jabatan, colX, currentY, paintTtdText)
+                    currentY += ttdFontSizePx + 4f
+                }
+
+                currentY += 42f
+
+                if (signer.nama.isNotBlank()) {
+                    canvas.drawText(signer.nama, colX, currentY, paintTtdTextBold)
+                    val nameWidth = paintTtdTextBold.measureText(signer.nama)
+                    canvas.drawLine(colX, currentY + 1.5f, colX + nameWidth, currentY + 1.5f, paintTtdTextBold)
+                    currentY += ttdFontSizePx + 4f
+                }
+
+                if (signer.nip.isNotBlank()) {
+                    val nipLabel = if (signer.nip.uppercase().startsWith("NIP")) signer.nip else "NIP. ${signer.nip}"
+                    canvas.drawText(nipLabel, colX, currentY, paintTtdText)
+                    currentY += ttdFontSizePx + 4f
+                }
+            }
+        }
     }
     
     pdfDocument.finishPage(currentPage)

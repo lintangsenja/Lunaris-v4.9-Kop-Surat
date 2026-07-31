@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,10 +25,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -48,7 +51,15 @@ import coil.compose.AsyncImage
 import com.example.data.entity.KopLaporanEntity
 import com.example.data.entity.RecentKopEntity
 import com.example.data.entity.DEFAULT_KOP_ROW_ORDER
+import com.example.data.entity.DEFAULT_KOP_FONT_FAMILY
+import com.example.data.entity.DEFAULT_TTD_FONT_FAMILY
+import com.example.data.entity.DEFAULT_TTD_FONT_SIZE
+import com.example.data.entity.DEFAULT_JABATAN_OPTIONS
+import com.example.data.entity.TtdSignerItem
+import com.example.data.entity.getDefaultTtdSigners
 import com.example.data.entity.parseKopRowOrder
+import com.example.data.entity.parseTtdSigners
+import com.example.data.entity.serializeTtdSigners
 import com.example.ui.viewmodel.InventoryViewModel
 import java.io.File
 import java.io.FileOutputStream
@@ -97,6 +108,16 @@ fun KopLaporanScreen(
 
     // Dynamic row order list
     var rowOrderList by remember(kopState) { mutableStateOf<List<String>>(parseKopRowOrder(kopState.rowOrder)) }
+    var kopFontFamily by remember(kopState) { mutableStateOf(if (kopState.kopFontFamily.isBlank()) DEFAULT_KOP_FONT_FAMILY else kopState.kopFontFamily) }
+
+    // Active Tab
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    // TTD States
+    var tempatTanggal by remember(kopState) { mutableStateOf(kopState.tempatTanggal) }
+    var ttdFontFamily by remember(kopState) { mutableStateOf(if (kopState.ttdFontFamily.isBlank()) DEFAULT_TTD_FONT_FAMILY else kopState.ttdFontFamily) }
+    var ttdFontSize by remember(kopState) { mutableIntStateOf(if (kopState.ttdFontSize <= 0) DEFAULT_TTD_FONT_SIZE else kopState.ttdFontSize) }
+    var signerList by remember(kopState) { mutableStateOf<List<TtdSignerItem>>(parseTtdSigners(kopState.ttdSignersJson)) }
 
     // Helper functions for dynamic key mapping
     fun getTextForKey(key: String): String = when (key) {
@@ -286,6 +307,11 @@ fun KopLaporanScreen(
                             logoKiriPath = kopState.logoKiriPath
                             logoKananPath = kopState.logoKananPath
                             rowOrderList = parseKopRowOrder(kopState.rowOrder)
+                            kopFontFamily = if (kopState.kopFontFamily.isBlank()) DEFAULT_KOP_FONT_FAMILY else kopState.kopFontFamily
+                            tempatTanggal = kopState.tempatTanggal
+                            ttdFontFamily = if (kopState.ttdFontFamily.isBlank()) DEFAULT_TTD_FONT_FAMILY else kopState.ttdFontFamily
+                            ttdFontSize = if (kopState.ttdFontSize <= 0) DEFAULT_TTD_FONT_SIZE else kopState.ttdFontSize
+                            signerList = parseTtdSigners(kopState.ttdSignersJson)
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -317,12 +343,17 @@ fun KopLaporanScreen(
                                 lainnyaFontSize = lainnyaFontSize,
                                 logoKiriPath = logoKiriPath,
                                 logoKananPath = logoKananPath,
-                                rowOrder = rowOrderList.joinToString(",")
+                                rowOrder = rowOrderList.joinToString(","),
+                                kopFontFamily = kopFontFamily,
+                                tempatTanggal = tempatTanggal.trim(),
+                                ttdFontFamily = ttdFontFamily,
+                                ttdFontSize = ttdFontSize,
+                                ttdSignersJson = serializeTtdSigners(signerList)
                             )
                             viewModel.saveKopLaporan(updatedKop, saveToHistory = true) {
                                 Toast.makeText(
                                     context,
-                                    "Konfigurasi Kop Laporan Berhasil Disimpan & Diperbarui!",
+                                    "Konfigurasi Kop & Footer TTD Berhasil Disimpan!",
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -354,6 +385,45 @@ fun KopLaporanScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // TAB SELECTOR FOR KOP HEADER VS FOOTER TTD
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = Color.White,
+                contentColor = Color(0xFF6D28D9),
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        color = Color(0xFF6D28D9)
+                    )
+                },
+                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Description, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("🏛️ Kop Header", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Draw, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("✍️ Footer & TTD", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                )
+            }
+
+            if (selectedTab == 0) {
+                // TAB 0: KOP HEADER CONFIGURATION
             // 1. CARD PREVIEW KOP LAPORAN (LIVE VISUAL PREVIEW)
             Card(
                 modifier = Modifier
@@ -470,7 +540,11 @@ fun KopLaporanScreen(
                                                 text = if (isUppercase) text.uppercase() else text,
                                                 fontSize = (fontSize * scaleFactor).sp,
                                                 fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-                                                fontFamily = FontFamily.Serif,
+                                                fontFamily = when (kopFontFamily.uppercase()) {
+                                                    "TIMES NEW ROMAN", "SERIF" -> FontFamily.Serif
+                                                    "COURIER", "MONOSPACE" -> FontFamily.Monospace
+                                                    else -> FontFamily.SansSerif
+                                                },
                                                 textAlign = TextAlign.Center,
                                                 color = Color.Black,
                                                 maxLines = 2,
@@ -535,6 +609,70 @@ fun KopLaporanScreen(
                                         .background(Color.Black)
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // MODUL PILIHAN FONT FAMILY KOP SURAT
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.TextFields,
+                            contentDescription = null,
+                            tint = Color(0xFF0284C7),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Tipografi & Font Kop Surat",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E1B4B)
+                        )
+                    }
+
+                    Text(
+                        text = "Pilih jenis font resmi kedinasan. Pilihan ini diterapkan secara serasi pada Kop Surat dan Footer TTD:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF64748B)
+                    )
+
+                    val fontOptions = listOf("Times New Roman", "Arial", "Courier")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        fontOptions.forEach { font ->
+                            val isSelected = kopFontFamily.equals(font, ignoreCase = true)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    kopFontFamily = font
+                                    ttdFontFamily = font
+                                },
+                                label = {
+                                    Text(
+                                        font,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFFE0F2FE),
+                                    selectedLabelColor = Color(0xFF0369A1)
+                                )
+                            )
                         }
                     }
                 }
@@ -699,6 +837,331 @@ fun KopLaporanScreen(
                     }
                 }
             }
+            } else {
+                // TAB 1: FOOTER & TTD CONFIGURATION
+
+                // 1. CARD: FORM TEMPAT DAN TANGGAL
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Place, contentDescription = null, tint = Color(0xFF6D28D9), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Form Tempat dan Tanggal Dokumen", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF1E1B4B))
+                        }
+                        Text(
+                            text = "Diletakkan secara dinamis mengikuti posisi penandatangan utama/paling kanan. Kondisi awal bersih tanpa data sampel.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF64748B)
+                        )
+                        OutlinedTextField(
+                            value = tempatTanggal,
+                            onValueChange = { tempatTanggal = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("tempat_tanggal_input"),
+                            label = { Text("Tempat dan Tanggal") },
+                            placeholder = { Text("Purbalingga, 19 April 2026") },
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Default.Event, contentDescription = null, tint = Color(0xFF6D28D9)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF6D28D9),
+                                focusedLabelColor = Color(0xFF6D28D9)
+                            )
+                        )
+                    }
+                }
+
+                // 2. CARD: KONTROL TIPOGRAFI (FONT & UKURAN)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.TextFields, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Tipografi Footer TTD (Jenis Font & Ukuran)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF1E1B4B))
+                        }
+
+                        Text("Pilihan Jenis Font (Font Family):", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = Color(0xFF334155))
+                        val fontOptions = listOf("Times New Roman", "Arial", "Courier")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            fontOptions.forEach { font ->
+                                val isSelected = ttdFontFamily.equals(font, ignoreCase = true)
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                    ttdFontFamily = font
+                                    kopFontFamily = font
+                                },
+                                    label = { Text(font, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                    modifier = Modifier.weight(1f),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFFE0F2FE),
+                                        selectedLabelColor = Color(0xFF0369A1)
+                                    )
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Ukuran Font TTD:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = Color(0xFF334155))
+                                Text("Rentang 8pt - 16pt (Default 10pt)", style = MaterialTheme.typography.bodySmall, color = Color(0xFF64748B))
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilledIconButton(
+                                    onClick = { if (ttdFontSize > 8) ttdFontSize-- },
+                                    enabled = ttdFontSize > 8,
+                                    modifier = Modifier.size(36.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFF1F5F9))
+                                ) {
+                                    Text("-", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFF1F5F9),
+                                    border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+                                ) {
+                                    Text(
+                                        text = "$ttdFontSize pt",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0F172A),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+
+                                FilledIconButton(
+                                    onClick = { if (ttdFontSize < 16) ttdFontSize++ },
+                                    enabled = ttdFontSize < 16,
+                                    modifier = Modifier.size(36.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFF1F5F9))
+                                ) {
+                                    Text("+", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. CARD: FORM PENANDATANGAN (MULTI-SIGNER & REORDER)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.Draw, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Penandatangan (Multi-Signer)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF1E1B4B))
+                            }
+                            TextButton(
+                                onClick = { signerList = getDefaultTtdSigners() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Reset Role Default", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+
+                        Text(
+                            text = "Gunakan tombol panah ke atas/bawah pada tiap kartu penandatangan untuk mengubah urutan penandatangan.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF64748B)
+                        )
+
+                        signerList.forEachIndexed { idx, signer ->
+                            TtdSignerCardItem(
+                                index = idx,
+                                totalCount = signerList.size,
+                                signer = signer,
+                                onSignerChange = { updated ->
+                                    val mutable = signerList.toMutableList()
+                                    mutable[idx] = updated
+                                    signerList = mutable
+                                },
+                                onMoveUp = {
+                                    if (idx > 0) {
+                                        val mutable = signerList.toMutableList()
+                                        val temp = mutable[idx]
+                                        mutable[idx] = mutable[idx - 1]
+                                        mutable[idx - 1] = temp
+                                        signerList = mutable
+                                    }
+                                },
+                                onMoveDown = {
+                                    if (idx < signerList.size - 1) {
+                                        val mutable = signerList.toMutableList()
+                                        val temp = mutable[idx]
+                                        mutable[idx] = mutable[idx + 1]
+                                        mutable[idx + 1] = temp
+                                        signerList = mutable
+                                    }
+                                },
+                                onDelete = {
+                                    if (signerList.size > 1) {
+                                        val mutable = signerList.toMutableList()
+                                        mutable.removeAt(idx)
+                                        signerList = mutable
+                                    }
+                                }
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                val mutable = signerList.toMutableList()
+                                mutable.add(TtdSignerItem(jabatan = "", nama = "", nip = "", isEnabled = true))
+                                signerList = mutable
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669))
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Tambah Penandatangan")
+                        }
+                    }
+                }
+
+                // 4. CARD: LIVE PREVIEW TTD
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Visibility, contentDescription = null, tint = Color(0xFF6D28D9), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Pratinjau Footer TTD (Live Preview)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF1E1B4B))
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.White, RoundedCornerShape(8.dp))
+                                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                                .padding(16.dp)
+                        ) {
+                            val activeSigners = signerList.filter { it.isEnabled }
+                            val fontType = when (ttdFontFamily.uppercase()) {
+                                "TIMES NEW ROMAN", "SERIF" -> FontFamily.Serif
+                                "COURIER", "MONOSPACE" -> FontFamily.Monospace
+                                else -> FontFamily.SansSerif
+                            }
+                            val displayFontSize = (ttdFontSize * 0.9f).sp
+
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                if (tempatTanggal.isNotBlank()) {
+                                    Text(
+                                        text = tempatTanggal,
+                                        fontFamily = fontType,
+                                        fontSize = displayFontSize,
+                                        color = Color.Black,
+                                        modifier = Modifier.align(Alignment.End)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+
+                                if (activeSigners.isEmpty()) {
+                                    Text(
+                                        text = "(Belum ada penandatangan diaktifkan)",
+                                        fontSize = 11.sp,
+                                        color = Color.Gray,
+                                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                                    )
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        activeSigners.take(3).forEach { s ->
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(
+                                                    text = s.jabatan.ifBlank { "Jabatan..." },
+                                                    fontFamily = fontType,
+                                                    fontSize = displayFontSize,
+                                                    fontWeight = FontWeight.Normal,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                                Spacer(modifier = Modifier.height(36.dp))
+                                                Text(
+                                                    text = s.nama.ifBlank { "( Nama Lengkap )" },
+                                                    fontFamily = fontType,
+                                                    fontSize = displayFontSize,
+                                                    fontWeight = FontWeight.Bold,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                                if (s.nip.isNotBlank()) {
+                                                    Text(
+                                                        text = if (s.nip.uppercase().startsWith("NIP")) s.nip else "NIP. ${s.nip}",
+                                                        fontFamily = fontType,
+                                                        fontSize = (ttdFontSize * 0.8f).sp,
+                                                        color = Color.DarkGray
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -750,6 +1213,11 @@ fun KopLaporanScreen(
                 lainnyaHeader = preset.lainnyaHeader
                 lainnyaFontSize = preset.lainnyaFontSize
                 rowOrderList = parseKopRowOrder(preset.rowOrder)
+                kopFontFamily = if (preset.kopFontFamily.isBlank()) DEFAULT_KOP_FONT_FAMILY else preset.kopFontFamily
+                tempatTanggal = preset.tempatTanggal
+                ttdFontFamily = if (preset.ttdFontFamily.isBlank()) DEFAULT_TTD_FONT_FAMILY else preset.ttdFontFamily
+                ttdFontSize = if (preset.ttdFontSize <= 0) DEFAULT_TTD_FONT_SIZE else preset.ttdFontSize
+                signerList = parseTtdSigners(preset.ttdSignersJson)
 
                 showRecentKopDialog = false
                 Toast.makeText(context, "Konfigurasi teks Kop diterapkan!", Toast.LENGTH_SHORT).show()
@@ -1402,4 +1870,192 @@ private fun saveCroppedBitmapToStorage(
     }
 
     return file.absolutePath
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TtdSignerCardItem(
+    index: Int,
+    totalCount: Int,
+    signer: TtdSignerItem,
+    onSignerChange: (TtdSignerItem) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var expandedJabatanDropdown by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFFAFAFA), RoundedCornerShape(12.dp))
+            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Top Header Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (signer.isEnabled) Color(0xFF059669) else Color(0xFF94A3B8),
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "${index + 1}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+                Text(
+                    text = signer.jabatan.ifBlank { "Penandatangan ${index + 1}" },
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+
+            // Controls: Up/Down Arrows, Enable Switch, Delete
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                IconButton(
+                    onClick = onMoveUp,
+                    enabled = index > 0,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Naik",
+                        tint = if (index > 0) Color(0xFF6D28D9) else Color(0xFFCBD5E1)
+                    )
+                }
+
+                IconButton(
+                    onClick = onMoveDown,
+                    enabled = index < totalCount - 1,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Turun",
+                        tint = if (index < totalCount - 1) Color(0xFF6D28D9) else Color(0xFFCBD5E1)
+                    )
+                }
+
+                Switch(
+                    checked = signer.isEnabled,
+                    onCheckedChange = { onSignerChange(signer.copy(isEnabled = it)) },
+                    modifier = Modifier.scale(0.8f)
+                )
+
+                if (totalCount > 1) {
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Hapus",
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Jabatan Dropdown / Custom Input
+        val suggestedJabatanList = remember {
+            (DEFAULT_JABATAN_OPTIONS + listOf("Laboran", "Koordinator Bengkel", "Koordinator Laboratorium", "Guru Pendamping")).distinct()
+        }
+
+        ExposedDropdownMenuBox(
+            expanded = expandedJabatanDropdown,
+            onExpandedChange = { expandedJabatanDropdown = !expandedJabatanDropdown }
+        ) {
+            OutlinedTextField(
+                value = signer.jabatan,
+                onValueChange = { onSignerChange(signer.copy(jabatan = it)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                label = { Text("Label / Jabatan Penandatangan (Editable)") },
+                placeholder = { Text("Ketik jabatan kustom (misal: Laboran, Koordinator Bengkel...)") },
+                singleLine = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedJabatanDropdown) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF059669),
+                    focusedLabelColor = Color(0xFF059669)
+                )
+            )
+
+            ExposedDropdownMenu(
+                expanded = expandedJabatanDropdown,
+                onDismissRequest = { expandedJabatanDropdown = false }
+            ) {
+                suggestedJabatanList.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option) },
+                        onClick = {
+                            onSignerChange(signer.copy(jabatan = option))
+                            expandedJabatanDropdown = false
+                        }
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "+ Ketik Jabatan Kustom Bebas",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFF059669)
+                        )
+                    },
+                    onClick = {
+                        expandedJabatanDropdown = false
+                    }
+                )
+            }
+        }
+
+        // Nama Lengkap Input
+        OutlinedTextField(
+            value = signer.nama,
+            onValueChange = { onSignerChange(signer.copy(nama = it)) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Nama Lengkap Penandatangan") },
+            placeholder = { Text("Contoh: Drs. H. Ahmad Fauzi, M.Pd.") },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF059669),
+                focusedLabelColor = Color(0xFF059669)
+            )
+        )
+
+        // NIP Input
+        OutlinedTextField(
+            value = signer.nip,
+            onValueChange = { onSignerChange(signer.copy(nip = it)) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("NIP / NUPTK / Identitas") },
+            placeholder = { Text("Contoh: 19750812 200003 1 002") },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF059669),
+                focusedLabelColor = Color(0xFF059669)
+            )
+        )
+    }
 }

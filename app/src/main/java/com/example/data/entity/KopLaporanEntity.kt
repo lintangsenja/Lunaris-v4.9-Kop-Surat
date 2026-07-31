@@ -4,6 +4,77 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 const val DEFAULT_KOP_ROW_ORDER = "pemprov,dinas,sekolah1,sekolah2,alamat1,alamat2,alamat3,lainnya"
+const val DEFAULT_KOP_FONT_FAMILY = "Times New Roman"
+const val DEFAULT_TTD_FONT_FAMILY = "Times New Roman"
+const val DEFAULT_TTD_FONT_SIZE = 10
+
+data class TtdSignerItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val jabatan: String = "",
+    val nama: String = "",
+    val nip: String = "",
+    val isEnabled: Boolean = true
+)
+
+val DEFAULT_JABATAN_OPTIONS = listOf(
+    "Kepala Sekolah",
+    "Waka Sarpras",
+    "Kepala Tata Usaha",
+    "Kepala Laboratorium",
+    "Teknisi/Toolman"
+)
+
+fun getDefaultTtdSigners(): List<TtdSignerItem> {
+    return DEFAULT_JABATAN_OPTIONS.map { jabatan ->
+        TtdSignerItem(
+            jabatan = jabatan,
+            nama = "",
+            nip = "",
+            isEnabled = true
+        )
+    }
+}
+
+fun parseTtdSigners(jsonStr: String?): List<TtdSignerItem> {
+    if (jsonStr.isNullOrBlank()) return getDefaultTtdSigners()
+    return try {
+        val array = org.json.JSONArray(jsonStr)
+        val list = mutableListOf<TtdSignerItem>()
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            list.add(
+                TtdSignerItem(
+                    id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                    jabatan = obj.optString("jabatan", ""),
+                    nama = obj.optString("nama", ""),
+                    nip = obj.optString("nip", ""),
+                    isEnabled = obj.optBoolean("isEnabled", true)
+                )
+            )
+        }
+        if (list.isEmpty()) getDefaultTtdSigners() else list
+    } catch (e: Exception) {
+        getDefaultTtdSigners()
+    }
+}
+
+fun serializeTtdSigners(list: List<TtdSignerItem>): String {
+    return try {
+        val array = org.json.JSONArray()
+        for (item in list) {
+            val obj = org.json.JSONObject()
+            obj.put("id", item.id)
+            obj.put("jabatan", item.jabatan)
+            obj.put("nama", item.nama)
+            obj.put("nip", item.nip)
+            obj.put("isEnabled", item.isEnabled)
+            array.put(obj)
+        }
+        array.toString()
+    } catch (e: Exception) {
+        ""
+    }
+}
 
 fun parseKopRowOrder(orderStr: String?): List<String> {
     val allKeys = listOf("pemprov", "dinas", "sekolah1", "sekolah2", "alamat1", "alamat2", "alamat3", "lainnya")
@@ -34,7 +105,12 @@ data class KopLaporanEntity(
     val lainnyaFontSize: Int = 10,
     val logoKiriPath: String = "",
     val logoKananPath: String = "",
-    val rowOrder: String = DEFAULT_KOP_ROW_ORDER
+    val rowOrder: String = DEFAULT_KOP_ROW_ORDER,
+    val kopFontFamily: String = DEFAULT_KOP_FONT_FAMILY,
+    val tempatTanggal: String = "",
+    val ttdFontFamily: String = DEFAULT_TTD_FONT_FAMILY,
+    val ttdFontSize: Int = DEFAULT_TTD_FONT_SIZE,
+    val ttdSignersJson: String = ""
 )
 
 @Entity(tableName = "recent_kop")
@@ -58,5 +134,10 @@ data class RecentKopEntity(
     val lainnyaHeader: String = "",
     val lainnyaFontSize: Int = 10,
     val rowOrder: String = DEFAULT_KOP_ROW_ORDER,
+    val kopFontFamily: String = DEFAULT_KOP_FONT_FAMILY,
+    val tempatTanggal: String = "",
+    val ttdFontFamily: String = DEFAULT_TTD_FONT_FAMILY,
+    val ttdFontSize: Int = DEFAULT_TTD_FONT_SIZE,
+    val ttdSignersJson: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )
