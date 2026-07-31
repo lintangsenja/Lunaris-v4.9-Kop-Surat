@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1157,7 +1158,8 @@ fun KopLaporanScreen(
                                         fontFamily = fontType,
                                         fontSize = displayFontSize,
                                         color = Color.Black,
-                                        modifier = Modifier.align(Alignment.End)
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.End
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                 }
@@ -1170,37 +1172,51 @@ fun KopLaporanScreen(
                                         modifier = Modifier.align(Alignment.CenterHorizontally)
                                     )
                                 } else {
-                                    Row(
+                                    val maxCols = if (activeSigners.size <= 3) activeSigners.size else 2
+                                    val rowsSigners = activeSigners.chunked(maxCols)
+
+                                    Column(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
-                                        activeSigners.take(3).forEach { s ->
-                                            Column(
-                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                                modifier = Modifier.weight(1f)
+                                        rowsSigners.forEach { rowList ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp),
+                                                horizontalArrangement = if (rowList.size == 1) Arrangement.End else Arrangement.SpaceBetween
                                             ) {
-                                                Text(
-                                                    text = s.jabatan.ifBlank { "Jabatan..." },
-                                                    fontFamily = fontType,
-                                                    fontSize = displayFontSize,
-                                                    fontWeight = FontWeight.Normal,
-                                                    textAlign = TextAlign.Center
-                                                )
-                                                Spacer(modifier = Modifier.height(36.dp))
-                                                Text(
-                                                    text = s.nama.ifBlank { "( Nama Lengkap )" },
-                                                    fontFamily = fontType,
-                                                    fontSize = displayFontSize,
-                                                    fontWeight = FontWeight.Bold,
-                                                    textAlign = TextAlign.Center
-                                                )
-                                                if (s.nip.isNotBlank()) {
-                                                    Text(
-                                                        text = if (s.nip.uppercase().startsWith("NIP")) s.nip else "NIP. ${s.nip}",
-                                                        fontFamily = fontType,
-                                                        fontSize = (ttdFontSize * 0.8f).sp,
-                                                        color = Color.DarkGray
-                                                    )
+                                                rowList.forEach { s ->
+                                                    Column(
+                                                        modifier = Modifier.widthIn(min = 120.dp, max = 150.dp),
+                                                        horizontalAlignment = Alignment.Start
+                                                    ) {
+                                                        Text(
+                                                            text = s.jabatan.ifBlank { "Jabatan..." },
+                                                            fontFamily = fontType,
+                                                            fontSize = displayFontSize,
+                                                            fontWeight = FontWeight.Normal,
+                                                            textAlign = TextAlign.Start
+                                                        )
+                                                        Spacer(modifier = Modifier.height(36.dp))
+                                                        Text(
+                                                            text = s.nama.ifBlank { "( Nama Lengkap )" },
+                                                            fontFamily = fontType,
+                                                            fontSize = displayFontSize,
+                                                            fontWeight = FontWeight.Bold,
+                                                            textAlign = TextAlign.Start,
+                                                            textDecoration = TextDecoration.Underline
+                                                        )
+                                                        if (s.nip.isNotBlank()) {
+                                                            Text(
+                                                                text = if (s.nip.uppercase().startsWith("NIP")) s.nip else "NIP. ${s.nip}",
+                                                                fontFamily = fontType,
+                                                                fontSize = (ttdFontSize * 0.8f).sp,
+                                                                color = Color.DarkGray,
+                                                                textAlign = TextAlign.Start
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

@@ -5402,6 +5402,7 @@ fun generatePdfBytes(
             textSize = ttdFontSizePx
             isAntiAlias = true
             typeface = ttdFontTypeface
+            textAlign = android.graphics.Paint.Align.LEFT
         }
         val paintTtdTextBold = android.graphics.Paint().apply {
             color = android.graphics.Color.BLACK
@@ -5409,6 +5410,14 @@ fun generatePdfBytes(
             isFakeBoldText = true
             isAntiAlias = true
             typeface = ttdFontTypeface
+            textAlign = android.graphics.Paint.Align.LEFT
+        }
+        val paintTtdTextRight = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = ttdFontSizePx
+            isAntiAlias = true
+            typeface = ttdFontTypeface
+            textAlign = android.graphics.Paint.Align.RIGHT
         }
 
         val neededSpace = if (activeSigners.size > 3) 220f else 120f
@@ -5433,15 +5442,20 @@ fun generatePdfBytes(
 
         fun getXForIndex(idx: Int, totalInRow: Int): Float {
             return when (totalInRow) {
-                1 -> 360f
-                2 -> if (idx == 0) 40f else 360f
+                1 -> 370f
+                2 -> if (idx == 0) 50f else 370f
                 3 -> when (idx) {
-                    0 -> 40f
-                    1 -> 200f
-                    else -> 360f
+                    0 -> 50f
+                    1 -> 210f
+                    else -> 370f
                 }
-                else -> 40f + idx * 160f
+                else -> 50f + idx * 150f
             }
+        }
+
+        if (tempatTanggalText.isNotBlank()) {
+            canvas.drawText(tempatTanggalText, 535f, y, paintTtdTextRight)
+            y += ttdFontSizePx + 6f
         }
 
         val row1StartY = y
@@ -5450,13 +5464,6 @@ fun generatePdfBytes(
         firstRowSigners.forEachIndexed { idx, signer ->
             val colX = getXForIndex(idx, firstRowSigners.size)
             var currentY = row1StartY
-
-            if (idx == firstRowSigners.size - 1 && tempatTanggalText.isNotBlank()) {
-                canvas.drawText(tempatTanggalText, colX, currentY, paintTtdText)
-                currentY += ttdFontSizePx + 4f
-            } else if (tempatTanggalText.isNotBlank()) {
-                currentY += ttdFontSizePx + 4f
-            }
 
             if (signer.jabatan.isNotBlank()) {
                 canvas.drawText(signer.jabatan, colX, currentY, paintTtdText)
