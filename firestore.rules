@@ -1,0 +1,45 @@
+// Firestore Security Rules for Lunaris App
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.role == 'super_admin' || 
+         request.auth.token.username == 'lintang' || 
+         request.auth.token.username == 'admin' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin');
+    }
+
+    // Rules for central admin profile and global settings (pengaturan_global/profil_admin)
+    match /pengaturan_global/profil_admin {
+      // Allow read for all clients (for instansi logo and admin photo display)
+      allow read: if true;
+      // Allow write for Super Admin or application sync
+      allow write: if true; // or: if isSuperAdmin();
+    }
+
+    // Rules for general pengaturan_global collection
+    match /pengaturan_global/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Rules for users collection
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Default rule for all other collections (items, transactions, loan_items, units, etc.)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,183 @@
+Reusing configuration cache.
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin
+w: file:///app/applet/app/src/main/java/com/example/data/database/AppDatabase.kt:322:46 The corresponding parameter in the supertype 'Migration' is named 'db'. This may cause problems when calling this function with named arguments.
+w: file:///app/applet/app/src/main/java/com/example/data/database/AppDatabase.kt:344:22 'fun fallbackToDestructiveMigrationOnDowngrade(): RoomDatabase.Builder<AppDatabase>' is deprecated. Replace by overloaded version with parameter to indicate if all tables should be dropped or not.
+w: file:///app/applet/app/src/main/java/com/example/data/network/FirebaseManager.kt:81:30 'fun setPersistenceEnabled(p0: Boolean): FirebaseFirestoreSettings.Builder' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/data/repository/InventoryRepository.kt:260:74 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/data/repository/InventoryRepository.kt:415:74 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/data/repository/InventoryRepository.kt:458:66 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/data/repository/InventoryRepository.kt:754:74 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/data/repository/InventoryRepository.kt:755:69 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/data/repository/InventoryRepository.kt:780:74 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/data/repository/InventoryRepository.kt:781:69 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/components/CameraScannerDialog.kt:475:26 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///app/applet/app/src/main/java/com/example/ui/components/LunarisDesignSystem.kt:92:5 'fun AlertDialog(onDismissRequest: () -> Unit, modifier: Modifier = ..., properties: DialogProperties = ..., content: @Composable() ComposableFunction0<Unit>): Unit' is deprecated. Use BasicAlertDialog instead.
+w: file:///app/applet/app/src/main/java/com/example/ui/components/LunarisDesignSystem.kt:400:5 'fun AlertDialog(onDismissRequest: () -> Unit, modifier: Modifier = ..., properties: DialogProperties = ..., content: @Composable() ComposableFunction0<Unit>): Unit' is deprecated. Use BasicAlertDialog instead.
+w: file:///app/applet/app/src/main/java/com/example/ui/components/LunarisDesignSystem.kt:643:76 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/components/LunarisDesignSystem.kt:650:5 'fun AlertDialog(onDismissRequest: () -> Unit, modifier: Modifier = ..., properties: DialogProperties = ..., content: @Composable() ComposableFunction0<Unit>): Unit' is deprecated. Use BasicAlertDialog instead.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/BackupScreen.kt:121:95 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/BackupScreen.kt:361:78 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/BahanAfkirScreen.kt:367:69 'val Icons.Filled.List: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.List.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/BahanAfkirScreen.kt:708:54 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/DashboardScreen.kt:728:46 'val Icons.Filled.ExitToApp: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ExitToApp.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/DashboardScreen.kt:1017:91 'val Icons.Filled.Assignment: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Assignment.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/DashboardScreen.kt:1018:94 'val Icons.Filled.AssignmentReturn: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.AssignmentReturn.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/DashboardScreen.kt:1276:86 'val Icons.Filled.AssignmentReturn: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.AssignmentReturn.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/DashboardScreen.kt:1276:122 'val Icons.Filled.Assignment: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Assignment.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/DashboardScreen.kt:1939:46 'val Icons.Filled.Assignment: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Assignment.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/DashboardScreen.kt:2166:61 'val Icons.Filled.ArrowBack: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowBack.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LabKomScreen.kt:1905:18 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LabKomScreen.kt:2001:81 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LaporanScreen.kt:139:68 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LaporanScreen.kt:302:58 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LaporanScreen.kt:1126:57 'val Icons.Filled.OpenInNew: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.OpenInNew.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LaporanScreen.kt:2373:108 'val Icons.Filled.Assignment: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Assignment.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LaporanScreen.kt:3618:57 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LaporanScreen.kt:4595:52 'val Icons.Filled.AssignmentReturn: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.AssignmentReturn.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LaporanScreen.kt:4747:64 'val Icons.Filled.AssignmentReturn: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.AssignmentReturn.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LogTransaksiScreen.kt:890:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LogTransaksiScreen.kt:1201:61 'val Icons.Filled.OpenInNew: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.OpenInNew.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/LogTransaksiScreen.kt:1325:61 'val Icons.Filled.Assignment: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Assignment.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/MasterDataScreen.kt:712:33 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/MasterDataScreen.kt:2933:41 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/MasterDataScreen.kt:3485:41 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/MutasiPerangkatScreen.kt:738:61 'val Icons.Filled.ArrowForward: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowForward.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/MutasiPerangkatScreen.kt:847:83 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/MutasiPerangkatScreen.kt:1501:17 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PemakaianBahanScreen.kt:309:69 'val Icons.Filled.Assignment: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Assignment.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PemakaianBahanScreen.kt:743:69 'val Icons.Filled.Notes: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Notes.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PemeliharaanScreen.kt:397:69 'val Icons.Filled.ListAlt: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ListAlt.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PemeliharaanScreen.kt:1409:30 Condition is always 'true'.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PeminjamanScreen.kt:251:68 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PeminjamanScreen.kt:255:54 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PeminjamanScreen.kt:258:49 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PeminjamanScreen.kt:1010:46 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PeminjamanScreen.kt:1464:54 'val Icons.Filled.Send: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Send.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PengembalianScreen.kt:197:68 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PengembalianScreen.kt:221:54 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PengembalianScreen.kt:224:49 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PengembalianScreen.kt:1039:50 'val Icons.Filled.Undo: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Undo.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PeripheralRusakScreen.kt:588:61 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/PeripheralRusakScreen.kt:629:61 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/RoleManagementScreen.kt:135:46 'val Icons.Filled.Assignment: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Assignment.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/RoleManagementScreen.kt:147:46 'val Icons.Filled.AssignmentReturn: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.AssignmentReturn.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/RoleManagementScreen.kt:401:43 'val Icons.Filled.CompareArrows: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.CompareArrows.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/RoleManagementScreen.kt:407:46 'val Icons.Filled.CompareArrows: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.CompareArrows.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/ScanQrScreen.kt:1210:26 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/StokPeripheralScreen.kt:1436:57 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/StokPeripheralScreen.kt:1517:57 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/StokPeripheralScreen.kt:1635:57 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/StokPeripheralScreen.kt:1680:57 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/StokPeripheralScreen.kt:1759:57 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/StokPeripheralScreen.kt:1790:57 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/StokPeripheralScreen.kt:2255:57 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes MenuAnchorType and enabled parameters.
+w: file:///app/applet/app/src/main/java/com/example/ui/screens/StokPeripheralScreen.kt:2382:31 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:112:65 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:1229:68 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:1231:44 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:1237:68 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:1239:44 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2150:86 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2331:86 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2600:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2601:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2727:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2728:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2778:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2779:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2826:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2827:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2858:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2859:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2889:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2890:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2930:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2931:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:2987:88 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3019:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3049:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3050:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3085:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3086:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3114:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3115:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3151:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3183:92 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3306:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3307:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3340:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3341:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3406:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3407:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3451:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3452:77 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:3608:86 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:4350:83 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:4358:83 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:4367:75 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:4385:71 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///app/applet/app/src/main/java/com/example/ui/viewmodel/InventoryViewModel.kt:4407:71 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+
+> Task :app:compileDebugJavaWithJavac FAILED
+/app/applet/app/build/generated/source/buildConfig/debug/com/example/BuildConfig.java:12: error: illegal start of expression
+  public static final String DUMMY_KEY = ;
+                                         ^
+1 error
+
+[Incubating] Problems report is available at: file:///app/applet/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler output below.
+  /app/applet/app/build/generated/source/buildConfig/debug/com/example/BuildConfig.java:12: error: illegal start of expression
+    public static final String DUMMY_KEY = ;
+                                           ^
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 2m 38s
+35 actionable tasks: 2 executed, 33 up-to-date
+Configuration cache entry reused.
