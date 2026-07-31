@@ -110,8 +110,20 @@ fun KopLaporanScreen(
     var rowOrderList by remember(kopState) { mutableStateOf<List<String>>(parseKopRowOrder(kopState.rowOrder)) }
     var kopFontFamily by remember(kopState) { mutableStateOf(if (kopState.kopFontFamily.isBlank()) DEFAULT_KOP_FONT_FAMILY else kopState.kopFontFamily) }
 
-    // Active Tab
-    var selectedTab by remember { mutableIntStateOf(0) }
+    // Active Tab & Permissions
+    val canKopLaporan = viewModel.isStudentPermissionGranted("kop_laporan")
+    val canKopSurat = viewModel.isStudentPermissionGranted("kop_surat")
+    val canFooterTtd = viewModel.isStudentPermissionGranted("footer_ttd")
+
+    var selectedTab by remember { mutableIntStateOf(if (!canKopSurat && canFooterTtd) 1 else 0) }
+
+    LaunchedEffect(canKopSurat, canFooterTtd) {
+        if (!canKopSurat && canFooterTtd) {
+            selectedTab = 1
+        } else if (canKopSurat && !canFooterTtd) {
+            selectedTab = 0
+        }
+    }
 
     // TTD States
     var tempatTanggal by remember(kopState) { mutableStateOf(kopState.tempatTanggal) }
@@ -385,44 +397,81 @@ fun KopLaporanScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // TAB SELECTOR FOR KOP HEADER VS FOOTER TTD
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = Color.White,
-                contentColor = Color(0xFF6D28D9),
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = Color(0xFF6D28D9)
-                    )
-                },
-                modifier = Modifier.clip(RoundedCornerShape(12.dp))
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Description, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("🏛️ Kop Header", fontWeight = FontWeight.Bold)
-                        }
+            // TAB SELECTOR & PERMISSION GUARD
+            if (!canKopLaporan || (!canKopSurat && !canFooterTtd)) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+                    border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = Color(0xFFDC2626),
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Akses Modul Kop Laporan Dibatasi",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color(0xFF991B1B)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Modul Kop Laporan atau tab di dalamnya dinonaktifkan untuk peran pengguna Anda.",
+                            fontSize = 12.sp,
+                            color = Color(0xFF7F1D1D)
+                        )
                     }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Draw, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("✍️ Footer & TTD", fontWeight = FontWeight.Bold)
-                        }
+                }
+            } else {
+                if (canKopSurat && canFooterTtd) {
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF6D28D9),
+                        indicator = { tabPositions ->
+                            TabRowDefaults.SecondaryIndicator(
+                                Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                color = Color(0xFF6D28D9)
+                            )
+                        },
+                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                    ) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(imageVector = Icons.Default.Description, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("🏛️ Kop Header", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(imageVector = Icons.Default.Draw, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("✍️ Footer & TTD", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        )
                     }
-                )
-            }
+                }
 
-            if (selectedTab == 0) {
+                if (selectedTab == 0 && canKopSurat) {
                 // TAB 0: KOP HEADER CONFIGURATION
             // 1. CARD PREVIEW KOP LAPORAN (LIVE VISUAL PREVIEW)
             Card(
@@ -837,7 +886,7 @@ fun KopLaporanScreen(
                     }
                 }
             }
-            } else {
+            } else if (selectedTab == 1 && canFooterTtd) {
                 // TAB 1: FOOTER & TTD CONFIGURATION
 
                 // 1. CARD: FORM TEMPAT DAN TANGGAL
@@ -1161,6 +1210,7 @@ fun KopLaporanScreen(
                         }
                     }
                 }
+            }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

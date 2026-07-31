@@ -1030,6 +1030,9 @@ fun DashboardScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         fun isMenuAllowedForSiswa(route: String): Boolean {
+            if (route == "Kop Laporan" || route == "kop_laporan" || route == "menu_kop_laporan") {
+                return viewModel.isStudentPermissionGranted("kop_laporan", if (userRole.contains("siswa", ignoreCase = true)) studentPermissions else null)
+            }
             if (!userRole.contains("siswa", ignoreCase = true)) return true
             return when (route) {
                 "Scan QR" -> viewModel.isStudentPermissionGranted("qr_group", studentPermissions) && (viewModel.isStudentPermissionGranted("scan_qr", studentPermissions) || viewModel.isStudentPermissionGranted("generate_qr", studentPermissions))
@@ -1043,6 +1046,7 @@ fun DashboardScreen(
                 "Stok Peripheral" -> viewModel.isStudentPermissionGranted("stok_peripheral", studentPermissions) && viewModel.isStudentPermissionGranted("stok_peripheral_view", studentPermissions)
                 "LabKom" -> viewModel.isStudentPermissionGranted("labkom", studentPermissions) && (viewModel.isStudentPermissionGranted("labkom_view", studentPermissions) || viewModel.isStudentPermissionGranted("labkom_form", studentPermissions) || viewModel.isStudentPermissionGranted("labkom_diagnosa", studentPermissions) || viewModel.isStudentPermissionGranted("labkom_manage", studentPermissions))
                 "Mutasi Perangkat", "mutasi_perangkat" -> viewModel.isStudentPermissionGranted("mutasi_perangkat", studentPermissions)
+                "Kop Laporan", "kop_laporan", "menu_kop_laporan" -> viewModel.isStudentPermissionGranted("kop_laporan", studentPermissions)
                 "List Peripheral Rusak", "Peripheral Rusak" -> viewModel.isStudentPermissionGranted("peripheral_rusak", studentPermissions) && (viewModel.isStudentPermissionGranted("peripheral_lapor_rusak", studentPermissions) || viewModel.isStudentPermissionGranted("peripheral_list", studentPermissions))
                 "Peminjaman" -> viewModel.isStudentPermissionGranted("peminjaman", studentPermissions) && (viewModel.isStudentPermissionGranted("peminjaman_form", studentPermissions) || viewModel.isStudentPermissionGranted("peminjaman_riwayat", studentPermissions))
                 "Pengembalian" -> viewModel.isStudentPermissionGranted("pengembalian", studentPermissions) && (viewModel.isStudentPermissionGranted("pengembalian_normal", studentPermissions) || viewModel.isStudentPermissionGranted("pengembalian_parsial", studentPermissions))

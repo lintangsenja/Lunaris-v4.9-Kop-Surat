@@ -178,6 +178,7 @@ fun LaporanScreen(
 
     val canExportExcel = !userRole.contains("siswa", ignoreCase = true) || viewModel.isStudentPermissionGranted("laporan_export_excel")
     val canPrintPdf = !userRole.contains("siswa", ignoreCase = true) || viewModel.isStudentPermissionGranted("laporan_print_pdf")
+    val canKopLaporan = viewModel.isStudentPermissionGranted("kop_laporan")
 
     LaunchedEffect(userRole, studentPermissions) {
         if (userRole.contains("siswa", ignoreCase = true) && !isTabAllowed(selectedTabState)) {
@@ -649,18 +650,20 @@ fun LaporanScreen(
                                     color = androidx.compose.ui.graphics.Color(0xFF1E293B)
                                 )
                             }
-                            IconButton(
-                                onClick = onNavigateToKopLaporan,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .testTag("kop_laporan_action_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Description,
-                                    contentDescription = "Pengaturan Kop Laporan",
-                                    tint = androidx.compose.ui.graphics.Color(0xFF6D28D9),
-                                    modifier = Modifier.size(22.dp)
-                                )
+                            if (canKopLaporan) {
+                                IconButton(
+                                    onClick = onNavigateToKopLaporan,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .testTag("kop_laporan_action_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Description,
+                                        contentDescription = "Pengaturan Kop Laporan",
+                                        tint = androidx.compose.ui.graphics.Color(0xFF6D28D9),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             }
                         }
                     }

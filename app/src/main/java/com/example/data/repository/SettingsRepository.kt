@@ -496,7 +496,11 @@ class SettingsRepository(private val context: Context) {
             "laporan_mutasi_view" to false,
             "laporan_mutasi_add" to false,
             "laporan_mutasi_edit" to false,
-            "laporan_mutasi_delete" to false
+            "laporan_mutasi_delete" to false,
+
+            "kop_laporan" to false,
+            "kop_surat" to false,
+            "footer_ttd" to false
         )
         val map = mutableMapOf<String, Boolean>()
         defaults.forEach { (key, defaultVal) ->

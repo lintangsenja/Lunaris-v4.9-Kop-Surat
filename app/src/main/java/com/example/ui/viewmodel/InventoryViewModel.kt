@@ -443,33 +443,55 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun isStudentPermissionGranted(permissionKey: String, currentMap: Map<String, Boolean>? = null): Boolean {
-        if (!_userRole.value.contains("siswa", ignoreCase = true)) return true
-        val permissions = currentMap ?: _studentPermissions.value
+        val role = _userRole.value.lowercase()
+        val permissions = currentMap ?: if (role.contains("siswa")) {
+            _studentPermissions.value
+        } else {
+            settingsRepository.getRolePermissions(role)
+        }
 
         val parentKeys = setOf(
             "peminjaman", "pengembalian", "qr_group", "log_transaksi",
             "alat", "kondisi_alat", "alat_rusak", "pemeliharaan", "hapus_aset",
             "bahan", "pemakaian_bahan", "bahan_afkir", "master_data",
             "stok_opname", "laporan", "stok_peripheral", "peripheral_rusak", "labkom",
-            "mutasi_perangkat", "log_mutasi", "laporan_mutasi"
+            "mutasi_perangkat", "log_mutasi", "laporan_mutasi", "kop_laporan"
         )
 
         if (permissionKey in parentKeys) {
             val parentVal = permissions[permissionKey]
             if (parentVal == false) return false
             if (parentVal == true) {
-                val prefix = if (permissionKey == "qr_group") "scan_qr" else "${permissionKey}_"
+                val prefix = when (permissionKey) {
+                    "qr_group" -> "scan_qr"
+                    "kop_laporan" -> "kop_"
+                    else -> "${permissionKey}_"
+                }
                 val subKeysExist = permissions.keys.any {
-                    it.startsWith(prefix) || (permissionKey == "qr_group" && (it == "scan_qr" || it == "generate_qr"))
+                    it.startsWith(prefix) || 
+                    (permissionKey == "qr_group" && (it == "scan_qr" || it == "generate_qr")) ||
+                    (permissionKey == "kop_laporan" && (it == "kop_surat" || it == "footer_ttd"))
                 }
                 if (!subKeysExist) return true
                 return permissions.entries.any { (k, v) ->
-                    v == true && (k.startsWith(prefix) || (permissionKey == "qr_group" && (k == "scan_qr" || k == "generate_qr")))
+                    v == true && (
+                        k.startsWith(prefix) || 
+                        (permissionKey == "qr_group" && (k == "scan_qr" || k == "generate_qr")) ||
+                        (permissionKey == "kop_laporan" && (k == "kop_surat" || k == "footer_ttd"))
+                    )
                 }
             }
-            val prefix = if (permissionKey == "qr_group") "scan_qr" else "${permissionKey}_"
+            val prefix = when (permissionKey) {
+                "qr_group" -> "scan_qr"
+                "kop_laporan" -> "kop_"
+                else -> "${permissionKey}_"
+            }
             return permissions.entries.any { (k, v) ->
-                v == true && (k.startsWith(prefix) || (permissionKey == "qr_group" && (k == "scan_qr" || k == "generate_qr")))
+                v == true && (
+                    k.startsWith(prefix) || 
+                    (permissionKey == "qr_group" && (k == "scan_qr" || k == "generate_qr")) ||
+                    (permissionKey == "kop_laporan" && (k == "kop_surat" || k == "footer_ttd"))
+                )
             }
         }
 
@@ -492,6 +514,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             permissionKey.startsWith("stok_peripheral_") -> "stok_peripheral"
             permissionKey.startsWith("peripheral_") -> "peripheral_rusak"
             permissionKey.startsWith("labkom_") -> "labkom"
+            permissionKey == "kop_surat" || permissionKey == "footer_ttd" || permissionKey.startsWith("kop_") -> "kop_laporan"
             else -> null
         }
 
@@ -499,7 +522,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             return false
         }
 
-        return permissions[permissionKey] == true
+        return permissions[permissionKey] ?: (!role.contains("siswa"))
     }
 
     fun resetStudentPermissionsToDefault() {

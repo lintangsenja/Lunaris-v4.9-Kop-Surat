@@ -43,7 +43,7 @@ import com.example.data.entity.RecentKopEntity
         KopLaporanEntity::class,
         RecentKopEntity::class
     ],
-    version = 26,
+    version = 27,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

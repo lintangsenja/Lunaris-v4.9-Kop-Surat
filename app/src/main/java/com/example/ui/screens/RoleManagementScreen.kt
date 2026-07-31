@@ -443,6 +443,25 @@ fun RoleManagementScreen(
                         )
                     )
                 )
+            ),
+            PermissionGroupData(
+                groupTitle = "7. Pengaturan Dokumen & Kop Laporan",
+                groupSubtitle = "Pengaturan header instansi, logo kop surat, tempat tanggal & tanda tangan (TTD)",
+                groupIcon = Icons.Default.Description,
+                items = listOf(
+                    PermissionParentItemData(
+                        parentKey = "kop_laporan",
+                        title = "Kop Laporan",
+                        description = "Pengaturan header instansi, logo kop surat, tempat tanggal & tanda tangan (TTD)",
+                        icon = Icons.Default.Description,
+                        iconBgColor = Color(0xFFF3E8FF),
+                        iconColor = Color(0xFF7C3AED),
+                        subItems = listOf(
+                            PermissionSubItemData("kop_surat", "Tab Kop Surat / Header", "Akses konfigurasi header instansi, alamat & logo kop surat", false),
+                            PermissionSubItemData("footer_ttd", "Tab Footer & TTD", "Akses konfigurasi tempat/tanggal & penandatangan (TTD)", false)
+                        )
+                    )
+                )
             )
         )
     }
