@@ -905,7 +905,7 @@ fun LogTransaksiScreen(
             val handleExportLog: (String) -> Unit = { format ->
                 val categoryName = mainCategories.getOrNull(selectedMainCategoryIndex) ?: "Log"
                 val dateStr = java.text.SimpleDateFormat("dd_MM_yyyy", java.util.Locale("id", "ID")).format(java.util.Date())
-                val filename = "Log_${categoryName.replace(" ", "_")}_$dateStr.${if (format == "Excel") "xlsx" else if (format == "CSV") "csv" else "pdf"}"
+                val filename = "Log_${categoryName.replace(" ", "_")}_$dateStr.${if (format == "Excel") "xlsx" else if (format == "Word" || format == "DOCX") "docx" else "pdf"}"
                 val title = "LOG AUDIT TERPADU - ${categoryName.uppercase()}"
 
                 val (headers, rows) = when (selectedMainCategoryIndex) {
@@ -970,13 +970,13 @@ fun LogTransaksiScreen(
                 }
 
                 val bytes = when (format) {
-                    "CSV" -> generateCsvBytes(title, headers, rows)
+                    "Word", "DOCX" -> generateWordBytes(title, "Periode Audit Terpadu: $dateStr", headers, rows)
                     "Excel" -> generateExcelBytes(title, headers, rows)
                     else -> generatePdfBytes(context, title, "Periode Audit Terpadu: $dateStr", headers, rows)
                 }
 
                 val mimeType = when (format) {
-                    "CSV" -> "text/csv"
+                    "Word", "DOCX" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     "Excel" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     else -> "application/pdf"
                 }
@@ -1111,16 +1111,16 @@ fun LogTransaksiScreen(
                                 }
                             }
 
-                            // 3. CSV Option
+                            // 3. Word Option
                             Card(
                                 onClick = {
                                     showExportDialog = false
-                                    handleExportLog("CSV")
+                                    handleExportLog("Word")
                                 },
                                 shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
                                 border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
-                                modifier = Modifier.fillMaxWidth().testTag("export_opt_csv")
+                                modifier = Modifier.fillMaxWidth().testTag("export_opt_word")
                             ) {
                                 Row(
                                     modifier = Modifier.padding(14.dp),
@@ -1132,12 +1132,12 @@ fun LogTransaksiScreen(
                                             .background(Color(0xFF2563EB), RoundedCornerShape(10.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.Default.Description, contentDescription = "CSV", tint = Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Default.Article, contentDescription = "Word", tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("CSV Raw Data (.csv)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E3A8A))
-                                        Text("Ekspor data mentah log ke berkas .csv untuk arsip audit", fontSize = 11.sp, color = Color(0xFF1E40AF))
+                                        Text("Word Document (.docx)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E3A8A))
+                                        Text("Ekspor rekapitulasi log ke berkas Microsoft Word terstruktur", fontSize = 11.sp, color = Color(0xFF1E40AF))
                                     }
                                 }
                             }

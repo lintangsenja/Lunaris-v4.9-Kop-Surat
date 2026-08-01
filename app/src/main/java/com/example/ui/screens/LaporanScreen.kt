@@ -320,7 +320,7 @@ fun LaporanScreen(
                 else -> "Sirkulasi Peminjaman"
             }
 
-            val filename = "Laporan_${folderName.replace(" ", "_")}_$dateStr.${if (format == "Excel") "xlsx" else if (format == "CSV") "csv" else "pdf"}"
+            val filename = "Laporan_${folderName.replace(" ", "_")}_$dateStr.${if (format == "Excel") "xlsx" else if (format == "Word" || format == "DOCX") "docx" else "pdf"}"
 
             val title = when (selectedTabState) {
                 0 -> "LAPORAN RINGKASAN FULL INVENTARIS - LUNARIS"
@@ -496,13 +496,13 @@ fun LaporanScreen(
             }
 
             val bytes = when (format) {
-                "CSV" -> generateCsvBytes(title, headers, rows, kopState)
+                "Word", "DOCX" -> generateWordBytes(title, "$startDateText s/d $endDateText", headers, rows, kopState)
                 "Excel" -> generateExcelBytes(title, headers, rows, kopState)
                 else -> generatePdfBytes(context, title, "$startDateText s/d $endDateText", headers, rows, kopState)
             }
 
             val mimeType = when (format) {
-                "CSV" -> "text/csv"
+                "Word", "DOCX" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 "Excel" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 else -> "application/pdf"
             }
@@ -1337,20 +1337,20 @@ fun LaporanScreen(
                             }
                         }
 
-                        // Option 3: CSV
+                        // Option 3: Word Document (.docx)
                         Surface(
                             onClick = {
                                 showExportFormatDialog = false
                                 if (canExportExcel) {
-                                    handleExport("CSV")
+                                    handleExport("Word")
                                 } else {
-                                    Toast.makeText(context, "Fitur Ekspor CSV dinonaktifkan untuk akun Siswa", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Fitur Ekspor Word dinonaktifkan untuk akun Siswa", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFFF0F9FF),
-                            border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
-                            modifier = Modifier.fillMaxWidth().testTag("btn_export_format_csv")
+                            color = Color(0xFFEFF6FF),
+                            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                            modifier = Modifier.fillMaxWidth().testTag("btn_export_format_word")
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
@@ -1360,14 +1360,14 @@ fun LaporanScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(40.dp)
-                                        .background(Color(0xFF0284C7), RoundedCornerShape(12.dp)),
+                                        .background(Color(0xFF2563EB), RoundedCornerShape(12.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.TableChart, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.Article, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("CSV Data Mentah (.csv)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF075985))
-                                    Text("Ekspor data mentah teks terpisah koma untuk integrasi database.", fontSize = 11.sp, color = Color.Gray)
+                                    Text("Word Document (.docx)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E40AF))
+                                    Text("Dokumen Microsoft Word resmi lengkap dengan Kop Laporan dan TTD.", fontSize = 11.sp, color = Color.Gray)
                                 }
                             }
                         }
@@ -5058,16 +5058,18 @@ fun openFile(context: Context, uri: android.net.Uri, mimeType: String) {
     }
 }
 
-// ==========================================
-// NATIVE FORMAT GENERATORS (CSV, EXCEL, PDF)
-// ==========================================
-fun generateCsvBytes(title: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
-    val bos = java.io.ByteArrayOutputStream()
-    bos.write(0xEF)
-    bos.write(0xBB)
-    bos.write(0xBF) // UTF-8 BOM
-    val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(bos, Charsets.UTF_8))
+// ==============================================
+// NATIVE FORMAT GENERATORS (WORD, EXCEL, PDF)
+// ==============================================
+
+fun generateWordBytes(title: String, period: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
+    val sb = StringBuilder()
+    sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n")
+    sb.append("<?mso-application progid=\"Word.Document\"?>\n")
+    sb.append("<w:wordDocument xmlns:w=\"http://schemas.microsoft.com/office/word/2003/wordml\">\n")
+    sb.append("<w:body>\n")
     
+    // Kop Laporan Header
     kopLaporan?.let { kop ->
         val order = parseKopRowOrder(kop.rowOrder)
         for (key in order) {
@@ -5083,37 +5085,98 @@ fun generateCsvBytes(title: String, headers: List<String>, rows: List<List<Strin
                 else -> ""
             }
             if (text.isNotBlank()) {
-                writer.write("\"${text.replace("\"", "\"\"")}\"\n")
+                val isBold = key in listOf("pemprov", "dinas", "sekolah1", "sekolah2")
+                sb.append("<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r>")
+                if (isBold) sb.append("<w:rPr><w:b/></w:rPr>")
+                sb.append("<w:t>").append(escapeXml(text)).append("</w:t></w:r></w:p>\n")
             }
         }
-        writer.write("\n")
+        sb.append("<w:p><w:pPr><w:pBdr><w:bottom w:val=\"double\" w:sz=\"12\" w:space=\"1\" w:color=\"000000\"/></w:pBdr></w:pPr></w:p>\n")
     }
 
-    writer.write("\"$title\"\n\n")
-    writer.write(headers.joinToString(separator = ",") { "\"${it.replace("\"", "\"\"")}\"" } + "\n")
+    // Title & Period
+    sb.append("<w:p><w:pPr><w:jc w:val=\"left\"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val=\"28\"/><w:color w:val=\"3B0764\"/></w:rPr><w:t>")
+    sb.append(escapeXml(title)).append("</w:t></w:r></w:p>\n")
+    sb.append("<w:p><w:r><w:rPr><w:i/><w:color w:val=\"666666\"/></w:rPr><w:t>Periode: ")
+    sb.append(escapeXml(period)).append("</w:t></w:r></w:p>\n")
+    sb.append("<w:p/>\n")
+
+    // Table
+    sb.append("<w:tbl>\n")
+    sb.append("<w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/><w:tblBorders><w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:left w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:right w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:insideV w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/></w:tblBorders></w:tblPr>\n")
+
+    // Header Row
+    sb.append("<w:tr>\n")
+    headers.forEach { h ->
+        sb.append("<w:tc><w:tcPr><w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"6D28D9\"/></w:tcPr><w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val=\"FFFFFF\"/></w:rPr><w:t>")
+        sb.append(escapeXml(h)).append("</w:t></w:r></w:p></w:tc>\n")
+    }
+    sb.append("</w:tr>\n")
+
+    // Data Rows
     rows.forEach { row ->
-        writer.write(row.joinToString(separator = ",") { "\"${it.replace("\"", "\"\"")}\"" } + "\n")
+        sb.append("<w:tr>\n")
+        headers.indices.forEach { colIdx ->
+            val valStr = row.getOrNull(colIdx) ?: ""
+            sb.append("<w:tc><w:p><w:r><w:t>").append(escapeXml(valStr)).append("</w:t></w:r></w:p></w:tc>\n")
+        }
+        sb.append("</w:tr>\n")
     }
+    sb.append("</w:tbl>\n")
 
-    // Append TTD Footer
+    // Append Signature Footer
     kopLaporan?.let { kop ->
         val activeSigners = parseTtdSigners(kop.ttdSignersJson).filter { it.isEnabled }
-        if (kop.tempatTanggal.isNotBlank() || activeSigners.isNotEmpty()) {
-            writer.write("\n\n")
-            if (kop.tempatTanggal.isNotBlank()) {
-                writer.write("\"${kop.tempatTanggal.replace("\"", "\"\"")}\"\n")
+        val tempatTanggalText = kop.tempatTanggal.trim()
+
+        if (activeSigners.isNotEmpty() || tempatTanggalText.isNotBlank()) {
+            sb.append("<w:p/><w:p/>\n")
+            val signersToRender = if (activeSigners.isEmpty()) {
+                listOf(TtdSignerItem(jabatan = "Kepala Sekolah", nama = "", nip = ""))
+            } else activeSigners
+
+            val maxCols = if (signersToRender.size <= 3) signersToRender.size else 2
+            val firstRowSigners = signersToRender.take(maxCols)
+
+            sb.append("<w:tbl><w:tblPr><w:tblW w:w=\"5000\" w:type=\"pct\"/><w:tblBorders><w:top w:val=\"none\"/><w:left w:val=\"none\"/><w:bottom w:val=\"none\"/><w:right w:val=\"none\"/><w:insideH w:val=\"none\"/><w:insideV w:val=\"none\"/></w:tblBorders></w:tblPr>\n")
+            
+            // Signature Row 1
+            sb.append("<w:tr>\n")
+            firstRowSigners.forEachIndexed { idx, signer ->
+                sb.append("<w:tc><w:p><w:pPr><w:jc w:val=\"left\"/></w:pPr>")
+                if (idx == firstRowSigners.size - 1 && tempatTanggalText.isNotBlank()) {
+                    sb.append("<w:r><w:t>").append(escapeXml(tempatTanggalText)).append("</w:t></w:r><w:br/>")
+                }
+                if (signer.jabatan.isNotBlank()) {
+                    sb.append("<w:r><w:t>").append(escapeXml(signer.jabatan)).append("</w:t></w:r><w:br/><w:br/><w:br/>")
+                } else {
+                    sb.append("<w:r><w:t>Jabatan...</w:t></w:r><w:br/><w:br/><w:br/>")
+                }
+                if (signer.nama.isNotBlank()) {
+                    sb.append("<w:r><w:rPr><w:b/><w:u w:val=\"single\"/></w:rPr><w:t>").append(escapeXml(signer.nama)).append("</w:t></w:r><w:br/>")
+                }
+                if (signer.nip.isNotBlank()) {
+                    val nipLabel = if (signer.nip.uppercase().startsWith("NIP")) signer.nip else "NIP. ${signer.nip}"
+                    sb.append("<w:r><w:t>").append(escapeXml(nipLabel)).append("</w:t></w:r>")
+                }
+                sb.append("</w:p></w:tc>\n")
             }
-            activeSigners.forEach { signer ->
-                if (signer.jabatan.isNotBlank()) writer.write("\"${signer.jabatan.replace("\"", "\"\"")}\"\n")
-                if (signer.nama.isNotBlank()) writer.write("\"${signer.nama.replace("\"", "\"\"")}\"\n")
-                if (signer.nip.isNotBlank()) writer.write("\"NIP. ${signer.nip.replace("\"", "\"\"")}\"\n")
-                writer.write("\n")
-            }
+            sb.append("</w:tr>\n")
+            sb.append("</w:tbl>\n")
         }
     }
 
-    writer.flush()
-    return bos.toByteArray()
+    sb.append("</w:body>\n")
+    sb.append("</w:wordDocument>\n")
+    return sb.toString().toByteArray(Charsets.UTF_8)
+}
+
+private fun escapeXml(text: String): String {
+    return text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")
 }
 
 fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
@@ -5323,19 +5386,27 @@ fun generatePdfBytes(
     canvas.drawText("Periode: $period", 40f, y, paintSub)
     y += 24f
     
-    // Columns distribution widths
-    val colWidths = floatArrayOf(110f, 40f, 40f, 110f, 70f, 65f, 80f)
-    val colPositions = FloatArray(7)
+    // Dynamic Columns distribution widths
+    val numCols = maxOf(headers.size, 1)
+    val totalTableWidth = 515f // 555f - 40f
+    val colWidths = FloatArray(numCols)
+    val colPositions = FloatArray(numCols)
+
+    val isDefault7 = numCols == 7
+    val defaultWidths = floatArrayOf(100f, 45f, 45f, 105f, 70f, 65f, 85f)
     var currentX = 40f
-    for (i in 0..6) {
+    for (i in 0 until numCols) {
         colPositions[i] = currentX
-        currentX += colWidths[i]
+        val w = if (isDefault7) defaultWidths[i] else (totalTableWidth / numCols)
+        colWidths[i] = w
+        currentX += w
     }
     
     // Draw Header Table
     canvas.drawRect(40f, y, 555f, y + 20f, paintTableHeadBg)
-    for (i in 0..6) {
-        canvas.drawText(headers[i], colPositions[i] + 4f, y + 13f, paintTableHead)
+    for (i in 0 until numCols) {
+        val hText = headers.getOrElse(i) { "" }
+        canvas.drawText(hText, colPositions[i] + 4f, y + 13f, paintTableHead)
     }
     y += 20f
     
@@ -5351,8 +5422,9 @@ fun generatePdfBytes(
             
             // Repeat Header
             canvas.drawRect(40f, y, 555f, y + 20f, paintTableHeadBg)
-            for (i in 0..6) {
-                canvas.drawText(headers[i], colPositions[i] + 4f, y + 13f, paintTableHead)
+            for (i in 0 until numCols) {
+                val hText = headers.getOrElse(i) { "" }
+                canvas.drawText(hText, colPositions[i] + 4f, y + 13f, paintTableHead)
             }
             y += 20f
         }
@@ -5364,12 +5436,12 @@ fun generatePdfBytes(
         
         // Border Rectangle
         canvas.drawRect(40f, y, 555f, y + 20f, paintBorder)
-        for (i in 1..6) {
+        for (i in 1 until numCols) {
             canvas.drawLine(colPositions[i], y, colPositions[i], y + 20f, paintBorder)
         }
         
         // Write cells values
-        for (i in 0..6) {
+        for (i in 0 until numCols) {
             val rawValue = row.getOrNull(i) ?: ""
             val paint = paintText
             val availableWidth = colWidths[i] - 8f
@@ -5454,7 +5526,8 @@ fun generatePdfBytes(
         }
 
         if (tempatTanggalText.isNotBlank()) {
-            canvas.drawText(tempatTanggalText, 535f, y, paintTtdTextRight)
+            val rightColX = getXForIndex(firstRowSigners.size - 1, firstRowSigners.size)
+            canvas.drawText(tempatTanggalText, rightColX, y, paintTtdText)
             y += ttdFontSizePx + 6f
         }
 

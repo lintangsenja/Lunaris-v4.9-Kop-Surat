@@ -1152,19 +1152,18 @@ fun KopLaporanScreen(
                             val displayFontSize = (ttdFontSize * 0.9f).sp
 
                             Column(modifier = Modifier.fillMaxWidth()) {
-                                if (tempatTanggal.isNotBlank()) {
-                                    Text(
-                                        text = tempatTanggal,
-                                        fontFamily = fontType,
-                                        fontSize = displayFontSize,
-                                        color = Color.Black,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.End
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                }
-
                                 if (activeSigners.isEmpty()) {
+                                    if (tempatTanggal.isNotBlank()) {
+                                        Text(
+                                            text = tempatTanggal,
+                                            fontFamily = fontType,
+                                            fontSize = displayFontSize,
+                                            color = Color.Black,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.End
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
                                     Text(
                                         text = "(Belum ada penandatangan diaktifkan)",
                                         fontSize = 11.sp,
@@ -1179,18 +1178,28 @@ fun KopLaporanScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
-                                        rowsSigners.forEach { rowList ->
+                                        rowsSigners.forEachIndexed { rowIndex, rowList ->
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .padding(horizontal = 12.dp),
                                                 horizontalArrangement = if (rowList.size == 1) Arrangement.End else Arrangement.SpaceBetween
                                             ) {
-                                                rowList.forEach { s ->
+                                                rowList.forEachIndexed { idx, s ->
                                                     Column(
                                                         modifier = Modifier.widthIn(min = 120.dp, max = 150.dp),
                                                         horizontalAlignment = Alignment.Start
                                                     ) {
+                                                        if (rowIndex == 0 && idx == rowList.size - 1 && tempatTanggal.isNotBlank()) {
+                                                            Text(
+                                                                text = tempatTanggal,
+                                                                fontFamily = fontType,
+                                                                fontSize = displayFontSize,
+                                                                color = Color.Black,
+                                                                textAlign = TextAlign.Start
+                                                            )
+                                                            Spacer(modifier = Modifier.height(4.dp))
+                                                        }
                                                         Text(
                                                             text = s.jabatan.ifBlank { "Jabatan..." },
                                                             fontFamily = fontType,
