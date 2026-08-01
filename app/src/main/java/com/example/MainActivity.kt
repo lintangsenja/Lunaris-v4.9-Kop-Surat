@@ -78,6 +78,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import com.example.ui.theme.pastelGradientBackground
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.FolderSpecial
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.Alignment
+
 class MainActivity : ComponentActivity() {
 
     private var itemsCloudListener: com.google.firebase.firestore.ListenerRegistration? = null
@@ -111,6 +132,9 @@ class MainActivity : ComponentActivity() {
             val darkTheme = false
 
             LunarisTheme(darkTheme = false) {
+                LaunchedEffect(Unit) {
+                    com.example.utils.LunarisStorageHelper.ensureLunarisFoldersExist(this@MainActivity)
+                }
                 if (!isLoggedIn) {
                     LoginScreen(
                         viewModel = inventoryViewModel,

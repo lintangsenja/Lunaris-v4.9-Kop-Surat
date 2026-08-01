@@ -981,19 +981,22 @@ fun LogTransaksiScreen(
                     else -> "application/pdf"
                 }
 
-                val savedFile = saveReportToAutoPath(context, "LogAudit", filename, bytes)
-                if (savedFile != null) {
-                    successFilename = savedFile.name
+                val exportResult = com.example.utils.LunarisStorageHelper.saveExportFile(
+                    context = context,
+                    subfolderName = "LogAudit",
+                    filename = filename,
+                    bytes = bytes,
+                    mimeType = mimeType
+                )
+
+                if (exportResult != null) {
+                    successFilename = exportResult.filename
                     successFileMimeType = mimeType
-                    successFileUri = androidx.core.content.FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        savedFile
-                    )
+                    successFileUri = exportResult.uri
                     showExportSuccessDialog = true
-                    if (format == "PDF") {
-                        openFile(context, successFileUri!!, mimeType)
-                    }
+                    
+                    android.widget.Toast.makeText(context, "Log berhasil disimpan di:\n${exportResult.displayPath}${exportResult.filename}", android.widget.Toast.LENGTH_LONG).show()
+                    com.example.utils.LunarisStorageHelper.openFile(context, exportResult.uri, mimeType)
                 } else {
                     android.widget.Toast.makeText(context, "Gagal meng-ekspor berkas log!", android.widget.Toast.LENGTH_SHORT).show()
                 }

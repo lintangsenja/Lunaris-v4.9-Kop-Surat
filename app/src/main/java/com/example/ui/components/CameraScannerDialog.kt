@@ -76,6 +76,12 @@ fun CameraScannerDialog(
     var scanMode by remember { mutableStateOf(initialMode) }
     var showScanSuccessFeedback by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        if (!cameraPermissionState.status.isGranted) {
+            cameraPermissionState.launchPermissionRequest()
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(

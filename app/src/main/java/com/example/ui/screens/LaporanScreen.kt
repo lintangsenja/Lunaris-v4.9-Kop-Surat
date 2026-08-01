@@ -507,26 +507,24 @@ fun LaporanScreen(
                 else -> "application/pdf"
             }
 
-            val savedFile = saveReportToAutoPath(context, folderName, filename, bytes)
-            if (savedFile != null) {
-                successFilename = savedFile.name
-                successFileMimeType = mimeType
-                successFileUri = androidx.core.content.FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    savedFile
-                )
+            val exportResult = com.example.utils.LunarisStorageHelper.saveExportFile(
+                context = context,
+                subfolderName = folderName,
+                filename = filename,
+                bytes = bytes,
+                mimeType = mimeType
+            )
+
+            if (exportResult != null) {
+                successFilename = exportResult.filename
+                successFileMimeType = exportResult.mimeType
+                successFileUri = exportResult.uri
                 
-                val saveLocationDesc = if (savedFile.absolutePath.contains("Download")) {
-                    "Penyimpanan Internal/Download/Lunaris/Unduh Laporan/$folderName/"
-                } else if (savedFile.absolutePath.contains("Android/data")) {
-                    "Penyimpanan Internal (Folder Aplikasi)"
-                } else {
-                    "Penyimpanan Internal/Lunaris/Unduh Laporan/$folderName/"
-                }
-                
-                Toast.makeText(context, "Laporan disimpan di: $saveLocationDesc", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Laporan berhasil disimpan di:\n${exportResult.displayPath}${exportResult.filename}", Toast.LENGTH_LONG).show()
                 showExportSuccessDialog = true
+                
+                // Automatically attempt opening exported document
+                com.example.utils.LunarisStorageHelper.openFile(context, exportResult.uri, exportResult.mimeType)
             } else {
                 Toast.makeText(context, "Gagal mengekspor laporan!", Toast.LENGTH_SHORT).show()
             }
@@ -5064,14 +5062,49 @@ fun openFile(context: Context, uri: android.net.Uri, mimeType: String) {
 
 fun generateWordBytes(title: String, period: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
     val sb = StringBuilder()
-    sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n")
-    sb.append("<?mso-application progid=\"Word.Document\"?>\n")
-    sb.append("<w:wordDocument xmlns:w=\"http://schemas.microsoft.com/office/word/2003/wordml\">\n")
-    sb.append("<w:body>\n")
-    
+    sb.append("<!DOCTYPE html>\n")
+    sb.append("<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>\n")
+    sb.append("<head>\n")
+    sb.append("<meta http-equiv='Content-Type' content='text/html; charset=utf-8'>\n")
+    sb.append("<title>").append(escapeXml(title)).append("</title>\n")
+    sb.append("<!--[if gte mso 9]>\n")
+    sb.append("<xml>\n")
+    sb.append(" <w:WordDocument>\n")
+    sb.append("  <w:View>Print</w:View>\n")
+    sb.append("  <w:Zoom>100</w:Zoom>\n")
+    sb.append("  <w:DoNotOptimizeForBrowser/>\n")
+    sb.append(" </w:WordDocument>\n")
+    sb.append("</xml>\n")
+    sb.append("<![endif]-->\n")
+    sb.append("<style>\n")
+    sb.append("@page WordSection1 { size: 21.0cm 29.7cm; margin: 2.0cm 2.0cm 2.0cm 2.0cm; mso-header-margin: 35.4pt; mso-footer-margin: 35.4pt; mso-paper-source: 0; }\n")
+    sb.append("div.WordSection1 { page: WordSection1; }\n")
+    sb.append("body { font-family: 'Arial', 'Calibri', sans-serif; font-size: 11pt; color: #1e293b; line-height: 1.3; }\n")
+    sb.append(".kop-box { text-align: center; margin-bottom: 10px; font-family: 'Times New Roman', Times, serif; }\n")
+    sb.append(".kop-h1 { font-size: 13pt; font-weight: bold; margin: 0; text-transform: uppercase; color: #000000; }\n")
+    sb.append(".kop-sub { font-size: 9.5pt; font-style: italic; margin: 0; color: #333333; }\n")
+    sb.append(".kop-line { border-bottom: 3px double #000000; margin-top: 8px; margin-bottom: 16px; width: 100%; }\n")
+    sb.append(".doc-title { font-size: 13pt; font-weight: bold; color: #3b0764; text-transform: uppercase; margin-top: 10px; margin-bottom: 4px; text-align: left; }\n")
+    sb.append(".doc-period { font-size: 9.5pt; color: #475569; font-style: italic; margin-bottom: 14px; text-align: left; }\n")
+    sb.append("table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }\n")
+    sb.append("table.data-table th { background-color: #6d28d9; color: #ffffff; border: 1px solid #4c1d95; padding: 7px 6px; font-size: 9.5pt; font-weight: bold; text-align: center; }\n")
+    sb.append("table.data-table td { border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 9pt; color: #0f172a; vertical-align: top; }\n")
+    sb.append("table.data-table tr:nth-child(even) { background-color: #f8fafc; }\n")
+    sb.append("table.ttd-table { width: 100%; border-collapse: collapse; margin-top: 30px; page-break-inside: avoid; }\n")
+    sb.append("table.ttd-table td { border: none !important; text-align: center; vertical-align: top; padding: 0 10px; }\n")
+    sb.append(".ttd-date { font-size: 9.5pt; margin-bottom: 4px; text-align: center; }\n")
+    sb.append(".ttd-jabatan { font-size: 9.5pt; margin-bottom: 45px; text-align: center; }\n")
+    sb.append(".ttd-nama { font-size: 10pt; font-weight: bold; text-decoration: underline; text-align: center; }\n")
+    sb.append(".ttd-nip { font-size: 9pt; color: #334155; text-align: center; }\n")
+    sb.append("</style>\n")
+    sb.append("</head>\n")
+    sb.append("<body>\n")
+    sb.append("<div class='WordSection1'>\n")
+
     // Kop Laporan Header
     kopLaporan?.let { kop ->
         val order = parseKopRowOrder(kop.rowOrder)
+        sb.append("<div class='kop-box'>\n")
         for (key in order) {
             val text = when (key) {
                 "pemprov" -> kop.pemprovHeader
@@ -5086,88 +5119,82 @@ fun generateWordBytes(title: String, period: String, headers: List<String>, rows
             }
             if (text.isNotBlank()) {
                 val isBold = key in listOf("pemprov", "dinas", "sekolah1", "sekolah2")
-                sb.append("<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r>")
-                if (isBold) sb.append("<w:rPr><w:b/></w:rPr>")
-                sb.append("<w:t>").append(escapeXml(text)).append("</w:t></w:r></w:p>\n")
+                if (isBold) {
+                    sb.append("<div class='kop-h1'>").append(escapeXml(text)).append("</div>\n")
+                } else {
+                    sb.append("<div class='kop-sub'>").append(escapeXml(text)).append("</div>\n")
+                }
             }
         }
-        sb.append("<w:p><w:pPr><w:pBdr><w:bottom w:val=\"double\" w:sz=\"12\" w:space=\"1\" w:color=\"000000\"/></w:pBdr></w:pPr></w:p>\n")
+        sb.append("<div class='kop-line'></div>\n")
+        sb.append("</div>\n")
     }
 
     // Title & Period
-    sb.append("<w:p><w:pPr><w:jc w:val=\"left\"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val=\"28\"/><w:color w:val=\"3B0764\"/></w:rPr><w:t>")
-    sb.append(escapeXml(title)).append("</w:t></w:r></w:p>\n")
-    sb.append("<w:p><w:r><w:rPr><w:i/><w:color w:val=\"666666\"/></w:rPr><w:t>Periode: ")
-    sb.append(escapeXml(period)).append("</w:t></w:r></w:p>\n")
-    sb.append("<w:p/>\n")
-
-    // Table
-    sb.append("<w:tbl>\n")
-    sb.append("<w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/><w:tblBorders><w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:left w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:right w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/><w:insideV w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"CCCCCC\"/></w:tblBorders></w:tblPr>\n")
-
-    // Header Row
-    sb.append("<w:tr>\n")
-    headers.forEach { h ->
-        sb.append("<w:tc><w:tcPr><w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"6D28D9\"/></w:tcPr><w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val=\"FFFFFF\"/></w:rPr><w:t>")
-        sb.append(escapeXml(h)).append("</w:t></w:r></w:p></w:tc>\n")
+    sb.append("<div class='doc-title'>").append(escapeXml(title)).append("</div>\n")
+    if (period.isNotBlank()) {
+        sb.append("<div class='doc-period'>").append(escapeXml(period)).append("</div>\n")
     }
-    sb.append("</w:tr>\n")
 
-    // Data Rows
+    // Table Data
+    sb.append("<table class='data-table'>\n<thead>\n<tr>\n")
+    headers.forEach { h ->
+        sb.append("<th>").append(escapeXml(h)).append("</th>\n")
+    }
+    sb.append("</tr>\n</thead>\n<tbody>\n")
+
     rows.forEach { row ->
-        sb.append("<w:tr>\n")
+        sb.append("<tr>\n")
         headers.indices.forEach { colIdx ->
             val valStr = row.getOrNull(colIdx) ?: ""
-            sb.append("<w:tc><w:p><w:r><w:t>").append(escapeXml(valStr)).append("</w:t></w:r></w:p></w:tc>\n")
+            sb.append("<td>").append(escapeXml(valStr)).append("</td>\n")
         }
-        sb.append("</w:tr>\n")
+        sb.append("</tr>\n")
     }
-    sb.append("</w:tbl>\n")
+    sb.append("</tbody>\n</table>\n")
 
-    // Append Signature Footer
+    // Signature Footer
     kopLaporan?.let { kop ->
         val activeSigners = parseTtdSigners(kop.ttdSignersJson).filter { it.isEnabled }
         val tempatTanggalText = kop.tempatTanggal.trim()
 
         if (activeSigners.isNotEmpty() || tempatTanggalText.isNotBlank()) {
-            sb.append("<w:p/><w:p/>\n")
             val signersToRender = if (activeSigners.isEmpty()) {
                 listOf(TtdSignerItem(jabatan = "Kepala Sekolah", nama = "", nip = ""))
             } else activeSigners
 
-            val maxCols = if (signersToRender.size <= 3) signersToRender.size else 2
-            val firstRowSigners = signersToRender.take(maxCols)
+            val count = signersToRender.size
+            val colWidth = 100 / count
 
-            sb.append("<w:tbl><w:tblPr><w:tblW w:w=\"5000\" w:type=\"pct\"/><w:tblBorders><w:top w:val=\"none\"/><w:left w:val=\"none\"/><w:bottom w:val=\"none\"/><w:right w:val=\"none\"/><w:insideH w:val=\"none\"/><w:insideV w:val=\"none\"/></w:tblBorders></w:tblPr>\n")
-            
-            // Signature Row 1
-            sb.append("<w:tr>\n")
-            firstRowSigners.forEachIndexed { idx, signer ->
-                sb.append("<w:tc><w:p><w:pPr><w:jc w:val=\"left\"/></w:pPr>")
-                if (idx == firstRowSigners.size - 1 && tempatTanggalText.isNotBlank()) {
-                    sb.append("<w:r><w:t>").append(escapeXml(tempatTanggalText)).append("</w:t></w:r><w:br/>")
-                }
-                if (signer.jabatan.isNotBlank()) {
-                    sb.append("<w:r><w:t>").append(escapeXml(signer.jabatan)).append("</w:t></w:r><w:br/><w:br/><w:br/>")
+            sb.append("<table class='ttd-table'>\n<tr>\n")
+            signersToRender.forEachIndexed { idx, signer ->
+                sb.append("<td style='width: ").append(colWidth).append("%;'>\n")
+                if (idx == count - 1 && tempatTanggalText.isNotBlank()) {
+                    sb.append("<div class='ttd-date'>").append(escapeXml(tempatTanggalText)).append("</div>\n")
                 } else {
-                    sb.append("<w:r><w:t>Jabatan...</w:t></w:r><w:br/><w:br/><w:br/>")
+                    sb.append("<div class='ttd-date'>&nbsp;</div>\n")
                 }
+                
+                val jbt = if (signer.jabatan.isNotBlank()) signer.jabatan else "Jabatan..."
+                sb.append("<div class='ttd-jabatan'>").append(escapeXml(jbt)).append("</div>\n")
+                
                 if (signer.nama.isNotBlank()) {
-                    sb.append("<w:r><w:rPr><w:b/><w:u w:val=\"single\"/></w:rPr><w:t>").append(escapeXml(signer.nama)).append("</w:t></w:r><w:br/>")
+                    sb.append("<div class='ttd-nama'>").append(escapeXml(signer.nama)).append("</div>\n")
+                } else {
+                    sb.append("<div class='ttd-nama'>&nbsp;</div>\n")
                 }
+                
                 if (signer.nip.isNotBlank()) {
                     val nipLabel = if (signer.nip.uppercase().startsWith("NIP")) signer.nip else "NIP. ${signer.nip}"
-                    sb.append("<w:r><w:t>").append(escapeXml(nipLabel)).append("</w:t></w:r>")
+                    sb.append("<div class='ttd-nip'>").append(escapeXml(nipLabel)).append("</div>\n")
                 }
-                sb.append("</w:p></w:tc>\n")
+                sb.append("</td>\n")
             }
-            sb.append("</w:tr>\n")
-            sb.append("</w:tbl>\n")
+            sb.append("</tr>\n</table>\n")
         }
     }
 
-    sb.append("</w:body>\n")
-    sb.append("</w:wordDocument>\n")
+    sb.append("</div>\n</body>\n</html>")
     return sb.toString().toByteArray(Charsets.UTF_8)
 }
 
@@ -5180,13 +5207,84 @@ private fun escapeXml(text: String): String {
 }
 
 fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
-    val bos = java.io.ByteArrayOutputStream()
-    bos.write(0xEF)
-    bos.write(0xBB)
-    bos.write(0xBF) // UTF-8 BOM
-    val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(bos, Charsets.UTF_8))
+    val sb = StringBuilder()
+    val numCols = maxOf(headers.size, 1)
+
+    sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+    sb.append("<?mso-application progid=\"Excel.Sheet\"?>\n")
+    sb.append("<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\"\n")
+    sb.append(" xmlns:o=\"urn:schemas-microsoft-com:office:office\"\n")
+    sb.append(" xmlns:x=\"urn:schemas-microsoft-com:office:excel\"\n")
+    sb.append(" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\"\n")
+    sb.append(" xmlns:html=\"http://www.w3.org/TR/REC-html40\">\n")
     
-    writer.write("sep=;\n") // Force Excel semicolon recognition
+    sb.append(" <Styles>\n")
+    sb.append("  <Style ss:ID=\"Default\" ss:Name=\"Normal\">\n")
+    sb.append("   <Alignment ss:Vertical=\"Bottom\"/>\n")
+    sb.append("   <Borders/>\n")
+    sb.append("   <Font ss:FontName=\"Calibri\" x:CharSet=\"1\" ss:Size=\"11\" ss:Color=\"#000000\"/>\n")
+    sb.append("   <Interior/>\n")
+    sb.append("   <NumberFormat/>\n")
+    sb.append("   <Protection/>\n")
+    sb.append("  </Style>\n")
+    
+    sb.append("  <Style ss:ID=\"KopHeader\">\n")
+    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>\n")
+    sb.append("   <Font ss:FontName=\"Times New Roman\" ss:Size=\"12\" ss:Bold=\"1\" ss:Color=\"#1E1B4B\"/>\n")
+    sb.append("  </Style>\n")
+    
+    sb.append("  <Style ss:ID=\"KopSub\">\n")
+    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>\n")
+    sb.append("   <Font ss:FontName=\"Times New Roman\" ss:Size=\"10\" ss:Italic=\"1\" ss:Color=\"#333333\"/>\n")
+    sb.append("  </Style>\n")
+
+    sb.append("  <Style ss:ID=\"TitleStyle\">\n")
+    sb.append("   <Alignment ss:Horizontal=\"Left\" ss:Vertical=\"Center\"/>\n")
+    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"13\" ss:Bold=\"1\" ss:Color=\"#3B0764\"/>\n")
+    sb.append("  </Style>\n")
+
+    sb.append("  <Style ss:ID=\"HeaderStyle\">\n")
+    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\" ss:WrapText=\"1\"/>\n")
+    sb.append("   <Borders>\n")
+    sb.append("    <Border ss:Position=\"Bottom\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#4C1D95\"/>\n")
+    sb.append("    <Border ss:Position=\"Left\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#4C1D95\"/>\n")
+    sb.append("    <Border ss:Position=\"Right\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#4C1D95\"/>\n")
+    sb.append("    <Border ss:Position=\"Top\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#4C1D95\"/>\n")
+    sb.append("   </Borders>\n")
+    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"10\" ss:Bold=\"1\" ss:Color=\"#FFFFFF\"/>\n")
+    sb.append("   <Interior ss:Color=\"#6D28D9\" ss:Pattern=\"Solid\"/>\n")
+    sb.append("  </Style>\n")
+
+    sb.append("  <Style ss:ID=\"DataStyle\">\n")
+    sb.append("   <Alignment ss:Vertical=\"Center\"/>\n")
+    sb.append("   <Borders>\n")
+    sb.append("    <Border ss:Position=\"Bottom\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#CBD5E1\"/>\n")
+    sb.append("    <Border ss:Position=\"Left\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#CBD5E1\"/>\n")
+    sb.append("    <Border ss:Position=\"Right\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#CBD5E1\"/>\n")
+    sb.append("    <Border ss:Position=\"Top\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#CBD5E1\"/>\n")
+    sb.append("   </Borders>\n")
+    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"10\" ss:Color=\"#0F172A\"/>\n")
+    sb.append("  </Style>\n")
+
+    sb.append("  <Style ss:ID=\"SignStyle\">\n")
+    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>\n")
+    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"10\"/>\n")
+    sb.append("  </Style>\n")
+
+    sb.append("  <Style ss:ID=\"SignBold\">\n")
+    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>\n")
+    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"10\" ss:Bold=\"1\" ss:Underline=\"Single\"/>\n")
+    sb.append("  </Style>\n")
+    sb.append(" </Styles>\n")
+
+    sb.append(" <Worksheet ss:Name=\"Laporan\">\n")
+    sb.append("  <Table>\n")
+
+    headers.forEach { _ ->
+        sb.append("   <Column ss:Width=\"120\"/>\n")
+    }
+
+    // Kop Laporan
     kopLaporan?.let { kop ->
         val order = parseKopRowOrder(kop.rowOrder)
         for (key in order) {
@@ -5202,37 +5300,113 @@ fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<Str
                 else -> ""
             }
             if (text.isNotBlank()) {
-                writer.write("\"${text.replace("\"", "\"\"")}\";\n")
+                val styleId = if (key in listOf("pemprov", "dinas", "sekolah1", "sekolah2")) "KopHeader" else "KopSub"
+                sb.append("   <Row ss:Height=\"18\">\n")
+                sb.append("    <Cell ss:MergeAcross=\"").append(numCols - 1).append("\" ss:StyleID=\"").append(styleId).append("\"><Data ss:Type=\"String\">")
+                sb.append(escapeXml(text)).append("</Data></Cell>\n")
+                sb.append("   </Row>\n")
             }
         }
-        writer.write("\n")
+        sb.append("   <Row ss:Height=\"6\"/>\n")
     }
 
-    writer.write("\"$title\";\n\n")
-    writer.write(headers.joinToString(separator = ";") { "\"${it.replace("\"", "\"\"")}\"" } + "\n")
+    // Title
+    sb.append("   <Row ss:Height=\"22\">\n")
+    sb.append("    <Cell ss:MergeAcross=\"").append(numCols - 1).append("\" ss:StyleID=\"TitleStyle\"><Data ss:Type=\"String\">")
+    sb.append(escapeXml(title)).append("</Data></Cell>\n")
+    sb.append("   </Row>\n")
+    sb.append("   <Row ss:Height=\"8\"/>\n")
+
+    // Header Row
+    sb.append("   <Row ss:Height=\"24\">\n")
+    headers.forEach { h ->
+        sb.append("    <Cell ss:StyleID=\"HeaderStyle\"><Data ss:Type=\"String\">")
+        sb.append(escapeXml(h)).append("</Data></Cell>\n")
+    }
+    sb.append("   </Row>\n")
+
+    // Data Rows
     rows.forEach { row ->
-        writer.write(row.joinToString(separator = ";") { "\"${it.replace("\"", "\"\"")}\"" } + "\n")
+        sb.append("   <Row ss:Height=\"20\">\n")
+        headers.indices.forEach { colIdx ->
+            val valStr = row.getOrNull(colIdx) ?: ""
+            sb.append("    <Cell ss:StyleID=\"DataStyle\"><Data ss:Type=\"String\">")
+            sb.append(escapeXml(valStr)).append("</Data></Cell>\n")
+        }
+        sb.append("   </Row>\n")
     }
 
-    // Append TTD Footer
+    // Signature Footer
     kopLaporan?.let { kop ->
         val activeSigners = parseTtdSigners(kop.ttdSignersJson).filter { it.isEnabled }
-        if (kop.tempatTanggal.isNotBlank() || activeSigners.isNotEmpty()) {
-            writer.write("\n;\n")
-            if (kop.tempatTanggal.isNotBlank()) {
-                writer.write("\"${kop.tempatTanggal.replace("\"", "\"\"")}\";\n")
+        val tempatTanggalText = kop.tempatTanggal.trim()
+
+        if (activeSigners.isNotEmpty() || tempatTanggalText.isNotBlank()) {
+            sb.append("   <Row ss:Height=\"15\"/>\n")
+            sb.append("   <Row ss:Height=\"15\"/>\n")
+
+            val signersToRender = if (activeSigners.isEmpty()) {
+                listOf(TtdSignerItem(jabatan = "Kepala Sekolah", nama = "", nip = ""))
+            } else activeSigners
+
+            val count = signersToRender.size
+            
+            // Date Row
+            if (tempatTanggalText.isNotBlank()) {
+                sb.append("   <Row ss:Height=\"18\">\n")
+                for (i in 0 until numCols) {
+                    if (i == numCols - 1) {
+                        sb.append("    <Cell ss:StyleID=\"SignStyle\"><Data ss:Type=\"String\">")
+                        sb.append(escapeXml(tempatTanggalText)).append("</Data></Cell>\n")
+                    } else {
+                        sb.append("    <Cell/>\n")
+                    }
+                }
+                sb.append("   </Row>\n")
             }
-            activeSigners.forEach { signer ->
-                if (signer.jabatan.isNotBlank()) writer.write("\"${signer.jabatan.replace("\"", "\"\"")}\";\n")
-                if (signer.nama.isNotBlank()) writer.write("\"${signer.nama.replace("\"", "\"\"")}\";\n")
-                if (signer.nip.isNotBlank()) writer.write("\"NIP. ${signer.nip.replace("\"", "\"\"")}\";\n")
-                writer.write(";\n")
+
+            // Jabatan Row
+            sb.append("   <Row ss:Height=\"18\">\n")
+            signersToRender.forEachIndexed { idx, signer ->
+                val colIndex = if (count == 1) numCols - 1 else (idx * (numCols - 1) / maxOf(count - 1, 1))
+                val jbt = if (signer.jabatan.isNotBlank()) signer.jabatan else "Jabatan..."
+                sb.append("    <Cell ss:Index=\"").append(colIndex + 1).append("\" ss:StyleID=\"SignStyle\"><Data ss:Type=\"String\">")
+                sb.append(escapeXml(jbt)).append("</Data></Cell>\n")
             }
+            sb.append("   </Row>\n")
+
+            // Space Row
+            sb.append("   <Row ss:Height=\"45\"/>\n")
+
+            // Nama Row
+            sb.append("   <Row ss:Height=\"18\">\n")
+            signersToRender.forEachIndexed { idx, signer ->
+                val colIndex = if (count == 1) numCols - 1 else (idx * (numCols - 1) / maxOf(count - 1, 1))
+                val namaStr = if (signer.nama.isNotBlank()) signer.nama else ""
+                sb.append("    <Cell ss:Index=\"").append(colIndex + 1).append("\" ss:StyleID=\"SignBold\"><Data ss:Type=\"String\">")
+                sb.append(escapeXml(namaStr)).append("</Data></Cell>\n")
+            }
+            sb.append("   </Row>\n")
+
+            // NIP Row
+            sb.append("   <Row ss:Height=\"18\">\n")
+            signersToRender.forEachIndexed { idx, signer ->
+                val colIndex = if (count == 1) numCols - 1 else (idx * (numCols - 1) / maxOf(count - 1, 1))
+                if (signer.nip.isNotBlank()) {
+                    val nipLabel = if (signer.nip.uppercase().startsWith("NIP")) signer.nip else "NIP. ${signer.nip}"
+                    sb.append("    <Cell ss:Index=\"").append(colIndex + 1).append("\" ss:StyleID=\"SignStyle\"><Data ss:Type=\"String\">")
+                    sb.append(escapeXml(nipLabel)).append("</Data></Cell>\n")
+                }
+            }
+            sb.append("   </Row>\n")
         }
     }
 
-    writer.flush()
-    return bos.toByteArray()
+    sb.append("  </Table>\n")
+    sb.append(" </Worksheet>\n")
+    sb.append("</Workbook>")
+
+    return sb.toString().toByteArray(Charsets.UTF_8)
 }
 
 fun generatePdfBytes(
