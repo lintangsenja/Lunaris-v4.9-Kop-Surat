@@ -5060,51 +5060,63 @@ fun openFile(context: Context, uri: android.net.Uri, mimeType: String) {
 // NATIVE FORMAT GENERATORS (WORD, EXCEL, PDF)
 // ==============================================
 
+private fun createZipPackage(entries: Map<String, String>): ByteArray {
+    val bos = java.io.ByteArrayOutputStream()
+    java.util.zip.ZipOutputStream(bos).use { zos ->
+        for ((path, content) in entries) {
+            val entry = java.util.zip.ZipEntry(path)
+            zos.putNextEntry(entry)
+            zos.write(content.toByteArray(Charsets.UTF_8))
+            zos.closeEntry()
+        }
+    }
+    return bos.toByteArray()
+}
+
+private fun getExcelColumnName(index: Int): String {
+    var num = index
+    val sb = java.lang.StringBuilder()
+    while (num >= 0) {
+        sb.insert(0, ('A' + (num % 26)))
+        num = (num / 26) - 1
+    }
+    return sb.toString()
+}
+
+private fun escapeXml(text: String): String {
+    return text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")
+}
+
 fun generateWordBytes(title: String, period: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
-    val sb = StringBuilder()
-    sb.append("<!DOCTYPE html>\n")
-    sb.append("<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>\n")
-    sb.append("<head>\n")
-    sb.append("<meta http-equiv='Content-Type' content='text/html; charset=utf-8'>\n")
-    sb.append("<title>").append(escapeXml(title)).append("</title>\n")
-    sb.append("<!--[if gte mso 9]>\n")
-    sb.append("<xml>\n")
-    sb.append(" <w:WordDocument>\n")
-    sb.append("  <w:View>Print</w:View>\n")
-    sb.append("  <w:Zoom>100</w:Zoom>\n")
-    sb.append("  <w:DoNotOptimizeForBrowser/>\n")
-    sb.append(" </w:WordDocument>\n")
-    sb.append("</xml>\n")
-    sb.append("<![endif]-->\n")
-    sb.append("<style>\n")
-    sb.append("@page WordSection1 { size: 21.0cm 29.7cm; margin: 2.0cm 2.0cm 2.0cm 2.0cm; mso-header-margin: 35.4pt; mso-footer-margin: 35.4pt; mso-paper-source: 0; }\n")
-    sb.append("div.WordSection1 { page: WordSection1; }\n")
-    sb.append("body { font-family: 'Arial', 'Calibri', sans-serif; font-size: 11pt; color: #1e293b; line-height: 1.3; }\n")
-    sb.append(".kop-box { text-align: center; margin-bottom: 10px; font-family: 'Times New Roman', Times, serif; }\n")
-    sb.append(".kop-h1 { font-size: 13pt; font-weight: bold; margin: 0; text-transform: uppercase; color: #000000; }\n")
-    sb.append(".kop-sub { font-size: 9.5pt; font-style: italic; margin: 0; color: #333333; }\n")
-    sb.append(".kop-line { border-bottom: 3px double #000000; margin-top: 8px; margin-bottom: 16px; width: 100%; }\n")
-    sb.append(".doc-title { font-size: 13pt; font-weight: bold; color: #3b0764; text-transform: uppercase; margin-top: 10px; margin-bottom: 4px; text-align: left; }\n")
-    sb.append(".doc-period { font-size: 9.5pt; color: #475569; font-style: italic; margin-bottom: 14px; text-align: left; }\n")
-    sb.append("table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }\n")
-    sb.append("table.data-table th { background-color: #6d28d9; color: #ffffff; border: 1px solid #4c1d95; padding: 7px 6px; font-size: 9.5pt; font-weight: bold; text-align: center; }\n")
-    sb.append("table.data-table td { border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 9pt; color: #0f172a; vertical-align: top; }\n")
-    sb.append("table.data-table tr:nth-child(even) { background-color: #f8fafc; }\n")
-    sb.append("table.ttd-table { width: 100%; border-collapse: collapse; margin-top: 30px; page-break-inside: avoid; }\n")
-    sb.append("table.ttd-table td { border: none !important; text-align: center; vertical-align: top; padding: 0 10px; }\n")
-    sb.append(".ttd-date { font-size: 9.5pt; margin-bottom: 4px; text-align: center; }\n")
-    sb.append(".ttd-jabatan { font-size: 9.5pt; margin-bottom: 45px; text-align: center; }\n")
-    sb.append(".ttd-nama { font-size: 10pt; font-weight: bold; text-decoration: underline; text-align: center; }\n")
-    sb.append(".ttd-nip { font-size: 9pt; color: #334155; text-align: center; }\n")
-    sb.append("</style>\n")
-    sb.append("</head>\n")
-    sb.append("<body>\n")
-    sb.append("<div class='WordSection1'>\n")
+    val contentTypes = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>"""
+
+    val rootRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>"""
+
+    val docRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>"""
+
+    val docXml = java.lang.StringBuilder()
+    docXml.append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+""")
 
     // Kop Laporan Header
     kopLaporan?.let { kop ->
         val order = parseKopRowOrder(kop.rowOrder)
-        sb.append("<div class='kop-box'>\n")
         for (key in order) {
             val text = when (key) {
                 "pemprov" -> kop.pemprovHeader
@@ -5119,39 +5131,59 @@ fun generateWordBytes(title: String, period: String, headers: List<String>, rows
             }
             if (text.isNotBlank()) {
                 val isBold = key in listOf("pemprov", "dinas", "sekolah1", "sekolah2")
-                if (isBold) {
-                    sb.append("<div class='kop-h1'>").append(escapeXml(text)).append("</div>\n")
-                } else {
-                    sb.append("<div class='kop-sub'>").append(escapeXml(text)).append("</div>\n")
-                }
+                val szVal = if (isBold) "26" else "20"
+                docXml.append("    <w:p><w:pPr><w:jc w:val=\"center\"/><w:spacing w:after=\"40\"/></w:pPr>")
+                docXml.append("<w:r><w:rPr>")
+                if (isBold) docXml.append("<w:b/>")
+                docXml.append("<w:rFonts w:ascii=\"Times New Roman\" w:hAnsi=\"Times New Roman\"/><w:sz w:val=\"$szVal\"/></w:rPr>")
+                docXml.append("<w:t xml:space=\"preserve\">").append(escapeXml(text)).append("</w:t></w:r></w:p>\n")
             }
         }
-        sb.append("<div class='kop-line'></div>\n")
-        sb.append("</div>\n")
+        docXml.append("    <w:p><w:pPr><w:pBdr><w:bottom w:val=\"double\" w:sz=\"12\" w:space=\"4\" w:color=\"000000\"/></w:pBdr><w:spacing w:after=\"200\"/></w:pPr></w:p>\n")
     }
 
     // Title & Period
-    sb.append("<div class='doc-title'>").append(escapeXml(title)).append("</div>\n")
+    docXml.append("    <w:p><w:pPr><w:spacing w:before=\"100\" w:after=\"60\"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val=\"28\"/><w:color w:val=\"3B0764\"/></w:rPr><w:t xml:space=\"preserve\">")
+    docXml.append(escapeXml(title)).append("</w:t></w:r></w:p>\n")
     if (period.isNotBlank()) {
-        sb.append("<div class='doc-period'>").append(escapeXml(period)).append("</div>\n")
+        docXml.append("    <w:p><w:pPr><w:spacing w:after=\"160\"/></w:pPr><w:r><w:rPr><w:i/><w:sz w:val=\"20\"/><w:color w:val=\"475569\"/></w:rPr><w:t xml:space=\"preserve\">")
+        docXml.append(escapeXml(period)).append("</w:t></w:r></w:p>\n")
     }
 
-    // Table Data
-    sb.append("<table class='data-table'>\n<thead>\n<tr>\n")
+    // Data Table
+    docXml.append("""    <w:tbl>
+      <w:tblPr>
+        <w:tblW w:w="5000" w:type="pct"/>
+        <w:tblBorders>
+          <w:top w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+          <w:left w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+          <w:bottom w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+          <w:right w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+          <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+          <w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+        </w:tblBorders>
+      </w:tblPr>
+""")
+
+    // Header Row
+    docXml.append("      <w:tr>\n")
     headers.forEach { h ->
-        sb.append("<th>").append(escapeXml(h)).append("</th>\n")
+        docXml.append("        <w:tc><w:tcPr><w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"6D28D9\"/></w:tcPr><w:p><w:pPr><w:jc w:val=\"center\"/><w:spacing w:before=\"80\" w:after=\"80\"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val=\"FFFFFF\"/><w:sz w:val=\"20\"/></w:rPr><w:t xml:space=\"preserve\">")
+        docXml.append(escapeXml(h)).append("</w:t></w:r></w:p></w:tc>\n")
     }
-    sb.append("</tr>\n</thead>\n<tbody>\n")
+    docXml.append("      </w:tr>\n")
 
+    // Data Rows
     rows.forEach { row ->
-        sb.append("<tr>\n")
+        docXml.append("      <w:tr>\n")
         headers.indices.forEach { colIdx ->
             val valStr = row.getOrNull(colIdx) ?: ""
-            sb.append("<td>").append(escapeXml(valStr)).append("</td>\n")
+            docXml.append("        <w:tc><w:p><w:pPr><w:spacing w:before=\"60\" w:after=\"60\"/></w:pPr><w:r><w:rPr><w:sz w:val=\"18\"/><w:color w:val=\"0F172A\"/></w:rPr><w:t xml:space=\"preserve\">")
+            docXml.append(escapeXml(valStr)).append("</w:t></w:r></w:p></w:tc>\n")
         }
-        sb.append("</tr>\n")
+        docXml.append("      </w:tr>\n")
     }
-    sb.append("</tbody>\n</table>\n")
+    docXml.append("    </w:tbl>\n")
 
     // Signature Footer
     kopLaporan?.let { kop ->
@@ -5159,130 +5191,144 @@ fun generateWordBytes(title: String, period: String, headers: List<String>, rows
         val tempatTanggalText = kop.tempatTanggal.trim()
 
         if (activeSigners.isNotEmpty() || tempatTanggalText.isNotBlank()) {
+            docXml.append("    <w:p><w:pPr><w:spacing w:before=\"300\"/></w:pPr></w:p>\n")
             val signersToRender = if (activeSigners.isEmpty()) {
                 listOf(TtdSignerItem(jabatan = "Kepala Sekolah", nama = "", nip = ""))
             } else activeSigners
 
             val count = signersToRender.size
-            val colWidth = 100 / count
-
-            sb.append("<table class='ttd-table'>\n<tr>\n")
+            docXml.append("""    <w:tbl>
+      <w:tblPr>
+        <w:tblW w:w="5000" w:type="pct"/>
+        <w:tblBorders>
+          <w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>
+          <w:insideH w:val="none"/><w:insideV w:val="none"/>
+        </w:tblBorders>
+      </w:tblPr>
+      <w:tr>
+""")
             signersToRender.forEachIndexed { idx, signer ->
-                sb.append("<td style='width: ").append(colWidth).append("%;'>\n")
+                docXml.append("        <w:tc><w:p><w:pPr><w:jc w:val=\"center\"/><w:spacing w:after=\"40\"/></w:pPr>")
                 if (idx == count - 1 && tempatTanggalText.isNotBlank()) {
-                    sb.append("<div class='ttd-date'>").append(escapeXml(tempatTanggalText)).append("</div>\n")
+                    docXml.append("<w:r><w:rPr><w:sz w:val=\"19\"/></w:rPr><w:t xml:space=\"preserve\">").append(escapeXml(tempatTanggalText)).append("</w:t></w:r>")
                 } else {
-                    sb.append("<div class='ttd-date'>&nbsp;</div>\n")
+                    docXml.append("<w:r><w:rPr><w:sz w:val=\"19\"/></w:rPr><w:t xml:space=\"preserve\"> </w:t></w:r>")
                 }
-                
+                docXml.append("</w:p>")
+
                 val jbt = if (signer.jabatan.isNotBlank()) signer.jabatan else "Jabatan..."
-                sb.append("<div class='ttd-jabatan'>").append(escapeXml(jbt)).append("</div>\n")
-                
-                if (signer.nama.isNotBlank()) {
-                    sb.append("<div class='ttd-nama'>").append(escapeXml(signer.nama)).append("</div>\n")
-                } else {
-                    sb.append("<div class='ttd-nama'>&nbsp;</div>\n")
-                }
-                
+                docXml.append("<w:p><w:pPr><w:jc w:val=\"center\"/><w:spacing w:after=\"600\"/></w:pPr><w:r><w:rPr><w:sz w:val=\"19\"/></w:rPr><w:t xml:space=\"preserve\">").append(escapeXml(jbt)).append("</w:t></w:r></w:p>")
+
+                val namaStr = if (signer.nama.isNotBlank()) signer.nama else " "
+                docXml.append("<w:p><w:pPr><w:jc w:val=\"center\"/><w:spacing w:after=\"40\"/></w:pPr><w:r><w:rPr><w:b/><w:u w:val=\"single\"/><w:sz w:val=\"20\"/></w:rPr><w:t xml:space=\"preserve\">").append(escapeXml(namaStr)).append("</w:t></w:r></w:p>")
+
                 if (signer.nip.isNotBlank()) {
                     val nipLabel = if (signer.nip.uppercase().startsWith("NIP")) signer.nip else "NIP. ${signer.nip}"
-                    sb.append("<div class='ttd-nip'>").append(escapeXml(nipLabel)).append("</div>\n")
+                    docXml.append("<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r><w:rPr><w:sz w:val=\"18\"/><w:color w:val=\"334155\"/></w:rPr><w:t xml:space=\"preserve\">").append(escapeXml(nipLabel)).append("</w:t></w:r></w:p>")
+                } else {
+                    docXml.append("<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr></w:p>")
                 }
-                sb.append("</td>\n")
+                docXml.append("</w:tc>\n")
             }
-            sb.append("</tr>\n</table>\n")
+            docXml.append("      </w:tr>\n    </w:tbl>\n")
         }
     }
 
-    sb.append("</div>\n</body>\n</html>")
-    return sb.toString().toByteArray(Charsets.UTF_8)
-}
+    docXml.append("""    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/>
+    </w:sectPr>
+  </w:body>
+</w:document>""")
 
-private fun escapeXml(text: String): String {
-    return text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("\"", "&quot;")
-        .replace("'", "&apos;")
+    val entries = mapOf(
+        "[Content_Types].xml" to contentTypes,
+        "_rels/.rels" to rootRels,
+        "word/_rels/document.xml.rels" to docRels,
+        "word/document.xml" to docXml.toString()
+    )
+
+    return createZipPackage(entries)
 }
 
 fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<String>>, kopLaporan: KopLaporanEntity? = null): ByteArray {
-    val sb = StringBuilder()
+    val contentTypes = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>"""
+
+    val rootRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"""
+
+    val workbookRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>"""
+
+    val workbookXml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Laporan" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>"""
+
+    val stylesXml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="5">
+    <font><sz val="11"/><color theme="1"/><name val="Calibri"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+    <font><b/><sz val="13"/><color rgb="FF3B0764"/><name val="Calibri"/></font>
+    <font><b/><sz val="12"/><color rgb="FF1E1B4B"/><name val="Times New Roman"/></font>
+    <font><sz val="10"/><color rgb="FF333333"/><name val="Times New Roman"/></font>
+  </fonts>
+  <fills count="3">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF6D28D9"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border>
+      <left style="thin"><color rgb="FFCBD5E1"/></left>
+      <right style="thin"><color rgb="FFCBD5E1"/></right>
+      <top style="thin"><color rgb="FFCBD5E1"/></top>
+      <bottom style="thin"><color rgb="FFCBD5E1"/></bottom>
+    </border>
+  </borders>
+  <cellStyleXfs count="1">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+  </cellStyleXfs>
+  <cellXfs count="6">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="center" vertical="center" wrapText="1"/>
+    </xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+    <xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1">
+      <alignment horizontal="center"/>
+    </xf>
+    <xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1">
+      <alignment horizontal="center"/>
+    </xf>
+  </cellXfs>
+</styleSheet>"""
+
+    val sheetXml = java.lang.StringBuilder()
+    sheetXml.append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetData>
+""")
+
+    var rowIndex = 1
     val numCols = maxOf(headers.size, 1)
-
-    sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-    sb.append("<?mso-application progid=\"Excel.Sheet\"?>\n")
-    sb.append("<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\"\n")
-    sb.append(" xmlns:o=\"urn:schemas-microsoft-com:office:office\"\n")
-    sb.append(" xmlns:x=\"urn:schemas-microsoft-com:office:excel\"\n")
-    sb.append(" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\"\n")
-    sb.append(" xmlns:html=\"http://www.w3.org/TR/REC-html40\">\n")
-    
-    sb.append(" <Styles>\n")
-    sb.append("  <Style ss:ID=\"Default\" ss:Name=\"Normal\">\n")
-    sb.append("   <Alignment ss:Vertical=\"Bottom\"/>\n")
-    sb.append("   <Borders/>\n")
-    sb.append("   <Font ss:FontName=\"Calibri\" x:CharSet=\"1\" ss:Size=\"11\" ss:Color=\"#000000\"/>\n")
-    sb.append("   <Interior/>\n")
-    sb.append("   <NumberFormat/>\n")
-    sb.append("   <Protection/>\n")
-    sb.append("  </Style>\n")
-    
-    sb.append("  <Style ss:ID=\"KopHeader\">\n")
-    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>\n")
-    sb.append("   <Font ss:FontName=\"Times New Roman\" ss:Size=\"12\" ss:Bold=\"1\" ss:Color=\"#1E1B4B\"/>\n")
-    sb.append("  </Style>\n")
-    
-    sb.append("  <Style ss:ID=\"KopSub\">\n")
-    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>\n")
-    sb.append("   <Font ss:FontName=\"Times New Roman\" ss:Size=\"10\" ss:Italic=\"1\" ss:Color=\"#333333\"/>\n")
-    sb.append("  </Style>\n")
-
-    sb.append("  <Style ss:ID=\"TitleStyle\">\n")
-    sb.append("   <Alignment ss:Horizontal=\"Left\" ss:Vertical=\"Center\"/>\n")
-    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"13\" ss:Bold=\"1\" ss:Color=\"#3B0764\"/>\n")
-    sb.append("  </Style>\n")
-
-    sb.append("  <Style ss:ID=\"HeaderStyle\">\n")
-    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\" ss:WrapText=\"1\"/>\n")
-    sb.append("   <Borders>\n")
-    sb.append("    <Border ss:Position=\"Bottom\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#4C1D95\"/>\n")
-    sb.append("    <Border ss:Position=\"Left\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#4C1D95\"/>\n")
-    sb.append("    <Border ss:Position=\"Right\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#4C1D95\"/>\n")
-    sb.append("    <Border ss:Position=\"Top\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#4C1D95\"/>\n")
-    sb.append("   </Borders>\n")
-    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"10\" ss:Bold=\"1\" ss:Color=\"#FFFFFF\"/>\n")
-    sb.append("   <Interior ss:Color=\"#6D28D9\" ss:Pattern=\"Solid\"/>\n")
-    sb.append("  </Style>\n")
-
-    sb.append("  <Style ss:ID=\"DataStyle\">\n")
-    sb.append("   <Alignment ss:Vertical=\"Center\"/>\n")
-    sb.append("   <Borders>\n")
-    sb.append("    <Border ss:Position=\"Bottom\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#CBD5E1\"/>\n")
-    sb.append("    <Border ss:Position=\"Left\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#CBD5E1\"/>\n")
-    sb.append("    <Border ss:Position=\"Right\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#CBD5E1\"/>\n")
-    sb.append("    <Border ss:Position=\"Top\" ss:LineStyle=\"Continuous\" ss:Weight=\"1\" ss:Color=\"#CBD5E1\"/>\n")
-    sb.append("   </Borders>\n")
-    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"10\" ss:Color=\"#0F172A\"/>\n")
-    sb.append("  </Style>\n")
-
-    sb.append("  <Style ss:ID=\"SignStyle\">\n")
-    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>\n")
-    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"10\"/>\n")
-    sb.append("  </Style>\n")
-
-    sb.append("  <Style ss:ID=\"SignBold\">\n")
-    sb.append("   <Alignment ss:Horizontal=\"Center\" ss:Vertical=\"Center\"/>\n")
-    sb.append("   <Font ss:FontName=\"Calibri\" ss:Size=\"10\" ss:Bold=\"1\" ss:Underline=\"Single\"/>\n")
-    sb.append("  </Style>\n")
-    sb.append(" </Styles>\n")
-
-    sb.append(" <Worksheet ss:Name=\"Laporan\">\n")
-    sb.append("  <Table>\n")
-
-    headers.forEach { _ ->
-        sb.append("   <Column ss:Width=\"120\"/>\n")
-    }
 
     // Kop Laporan
     kopLaporan?.let { kop ->
@@ -5300,40 +5346,48 @@ fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<Str
                 else -> ""
             }
             if (text.isNotBlank()) {
-                val styleId = if (key in listOf("pemprov", "dinas", "sekolah1", "sekolah2")) "KopHeader" else "KopSub"
-                sb.append("   <Row ss:Height=\"18\">\n")
-                sb.append("    <Cell ss:MergeAcross=\"").append(numCols - 1).append("\" ss:StyleID=\"").append(styleId).append("\"><Data ss:Type=\"String\">")
-                sb.append(escapeXml(text)).append("</Data></Cell>\n")
-                sb.append("   </Row>\n")
+                val styleId = if (key in listOf("pemprov", "dinas", "sekolah1", "sekolah2")) "4" else "5"
+                sheetXml.append("    <row r=\"$rowIndex\" ht=\"20\" customHeight=\"1\">\n")
+                sheetXml.append("      <c r=\"A$rowIndex\" t=\"inlineStr\" s=\"$styleId\"><is><t>")
+                sheetXml.append(escapeXml(text))
+                sheetXml.append("</t></is></c>\n    </row>\n")
+                rowIndex++
             }
         }
-        sb.append("   <Row ss:Height=\"6\"/>\n")
+        rowIndex++
     }
 
     // Title
-    sb.append("   <Row ss:Height=\"22\">\n")
-    sb.append("    <Cell ss:MergeAcross=\"").append(numCols - 1).append("\" ss:StyleID=\"TitleStyle\"><Data ss:Type=\"String\">")
-    sb.append(escapeXml(title)).append("</Data></Cell>\n")
-    sb.append("   </Row>\n")
-    sb.append("   <Row ss:Height=\"8\"/>\n")
+    sheetXml.append("    <row r=\"$rowIndex\" ht=\"24\" customHeight=\"1\">\n")
+    sheetXml.append("      <c r=\"A$rowIndex\" t=\"inlineStr\" s=\"1\"><is><t>")
+    sheetXml.append(escapeXml(title))
+    sheetXml.append("</t></is></c>\n    </row>\n")
+    rowIndex++
+    rowIndex++
 
     // Header Row
-    sb.append("   <Row ss:Height=\"24\">\n")
-    headers.forEach { h ->
-        sb.append("    <Cell ss:StyleID=\"HeaderStyle\"><Data ss:Type=\"String\">")
-        sb.append(escapeXml(h)).append("</Data></Cell>\n")
+    sheetXml.append("    <row r=\"$rowIndex\" ht=\"26\" customHeight=\"1\">\n")
+    headers.forEachIndexed { colIdx, h ->
+        val colRef = "${getExcelColumnName(colIdx)}$rowIndex"
+        sheetXml.append("      <c r=\"$colRef\" t=\"inlineStr\" s=\"2\"><is><t>")
+        sheetXml.append(escapeXml(h))
+        sheetXml.append("</t></is></c>\n")
     }
-    sb.append("   </Row>\n")
+    sheetXml.append("    </row>\n")
+    rowIndex++
 
     // Data Rows
     rows.forEach { row ->
-        sb.append("   <Row ss:Height=\"20\">\n")
+        sheetXml.append("    <row r=\"$rowIndex\" ht=\"20\" customHeight=\"1\">\n")
         headers.indices.forEach { colIdx ->
+            val colRef = "${getExcelColumnName(colIdx)}$rowIndex"
             val valStr = row.getOrNull(colIdx) ?: ""
-            sb.append("    <Cell ss:StyleID=\"DataStyle\"><Data ss:Type=\"String\">")
-            sb.append(escapeXml(valStr)).append("</Data></Cell>\n")
+            sheetXml.append("      <c r=\"$colRef\" t=\"inlineStr\" s=\"3\"><is><t>")
+            sheetXml.append(escapeXml(valStr))
+            sheetXml.append("</t></is></c>\n")
         }
-        sb.append("   </Row>\n")
+        sheetXml.append("    </row>\n")
+        rowIndex++
     }
 
     // Signature Footer
@@ -5342,71 +5396,75 @@ fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<Str
         val tempatTanggalText = kop.tempatTanggal.trim()
 
         if (activeSigners.isNotEmpty() || tempatTanggalText.isNotBlank()) {
-            sb.append("   <Row ss:Height=\"15\"/>\n")
-            sb.append("   <Row ss:Height=\"15\"/>\n")
+            rowIndex += 2
 
             val signersToRender = if (activeSigners.isEmpty()) {
                 listOf(TtdSignerItem(jabatan = "Kepala Sekolah", nama = "", nip = ""))
             } else activeSigners
 
             val count = signersToRender.size
-            
-            // Date Row
+
             if (tempatTanggalText.isNotBlank()) {
-                sb.append("   <Row ss:Height=\"18\">\n")
-                for (i in 0 until numCols) {
-                    if (i == numCols - 1) {
-                        sb.append("    <Cell ss:StyleID=\"SignStyle\"><Data ss:Type=\"String\">")
-                        sb.append(escapeXml(tempatTanggalText)).append("</Data></Cell>\n")
-                    } else {
-                        sb.append("    <Cell/>\n")
-                    }
-                }
-                sb.append("   </Row>\n")
+                val lastColRef = "${getExcelColumnName(numCols - 1)}$rowIndex"
+                sheetXml.append("    <row r=\"$rowIndex\" ht=\"18\" customHeight=\"1\">\n")
+                sheetXml.append("      <c r=\"$lastColRef\" t=\"inlineStr\" s=\"5\"><is><t>")
+                sheetXml.append(escapeXml(tempatTanggalText))
+                sheetXml.append("</t></is></c>\n    </row>\n")
+                rowIndex++
             }
 
-            // Jabatan Row
-            sb.append("   <Row ss:Height=\"18\">\n")
+            sheetXml.append("    <row r=\"$rowIndex\" ht=\"18\" customHeight=\"1\">\n")
             signersToRender.forEachIndexed { idx, signer ->
                 val colIndex = if (count == 1) numCols - 1 else (idx * (numCols - 1) / maxOf(count - 1, 1))
+                val colRef = "${getExcelColumnName(colIndex)}$rowIndex"
                 val jbt = if (signer.jabatan.isNotBlank()) signer.jabatan else "Jabatan..."
-                sb.append("    <Cell ss:Index=\"").append(colIndex + 1).append("\" ss:StyleID=\"SignStyle\"><Data ss:Type=\"String\">")
-                sb.append(escapeXml(jbt)).append("</Data></Cell>\n")
+                sheetXml.append("      <c r=\"$colRef\" t=\"inlineStr\" s=\"5\"><is><t>")
+                sheetXml.append(escapeXml(jbt))
+                sheetXml.append("</t></is></c>\n")
             }
-            sb.append("   </Row>\n")
+            sheetXml.append("    </row>\n")
 
-            // Space Row
-            sb.append("   <Row ss:Height=\"45\"/>\n")
+            rowIndex += 3
 
-            // Nama Row
-            sb.append("   <Row ss:Height=\"18\">\n")
+            sheetXml.append("    <row r=\"$rowIndex\" ht=\"18\" customHeight=\"1\">\n")
             signersToRender.forEachIndexed { idx, signer ->
                 val colIndex = if (count == 1) numCols - 1 else (idx * (numCols - 1) / maxOf(count - 1, 1))
+                val colRef = "${getExcelColumnName(colIndex)}$rowIndex"
                 val namaStr = if (signer.nama.isNotBlank()) signer.nama else ""
-                sb.append("    <Cell ss:Index=\"").append(colIndex + 1).append("\" ss:StyleID=\"SignBold\"><Data ss:Type=\"String\">")
-                sb.append(escapeXml(namaStr)).append("</Data></Cell>\n")
+                sheetXml.append("      <c r=\"$colRef\" t=\"inlineStr\" s=\"4\"><is><t>")
+                sheetXml.append(escapeXml(namaStr))
+                sheetXml.append("</t></is></c>\n")
             }
-            sb.append("   </Row>\n")
+            sheetXml.append("    </row>\n")
+            rowIndex++
 
-            // NIP Row
-            sb.append("   <Row ss:Height=\"18\">\n")
+            sheetXml.append("    <row r=\"$rowIndex\" ht=\"18\" customHeight=\"1\">\n")
             signersToRender.forEachIndexed { idx, signer ->
                 val colIndex = if (count == 1) numCols - 1 else (idx * (numCols - 1) / maxOf(count - 1, 1))
+                val colRef = "${getExcelColumnName(colIndex)}$rowIndex"
                 if (signer.nip.isNotBlank()) {
                     val nipLabel = if (signer.nip.uppercase().startsWith("NIP")) signer.nip else "NIP. ${signer.nip}"
-                    sb.append("    <Cell ss:Index=\"").append(colIndex + 1).append("\" ss:StyleID=\"SignStyle\"><Data ss:Type=\"String\">")
-                    sb.append(escapeXml(nipLabel)).append("</Data></Cell>\n")
+                    sheetXml.append("      <c r=\"$colRef\" t=\"inlineStr\" s=\"5\"><is><t>")
+                    sheetXml.append(escapeXml(nipLabel))
+                    sheetXml.append("</t></is></c>\n")
                 }
             }
-            sb.append("   </Row>\n")
+            sheetXml.append("    </row>\n")
         }
     }
 
-    sb.append("  </Table>\n")
-    sb.append(" </Worksheet>\n")
-    sb.append("</Workbook>")
+    sheetXml.append("  </sheetData>\n</worksheet>")
 
-    return sb.toString().toByteArray(Charsets.UTF_8)
+    val entries = mapOf(
+        "[Content_Types].xml" to contentTypes,
+        "_rels/.rels" to rootRels,
+        "xl/_rels/workbook.xml.rels" to workbookRels,
+        "xl/workbook.xml" to workbookXml,
+        "xl/styles.xml" to stylesXml,
+        "xl/worksheets/sheet1.xml" to sheetXml.toString()
+    )
+
+    return createZipPackage(entries)
 }
 
 fun generatePdfBytes(
