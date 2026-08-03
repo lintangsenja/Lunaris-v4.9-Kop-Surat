@@ -365,42 +365,23 @@ fun KelolaBarangTab(viewModel: InventoryViewModel) {
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val csvLines = mutableListOf<List<String>>()
-                    var line = reader.readLine()
-                    
-                    var delimiter = ','
-                    if (line != null) {
-                        if (line.contains(";") && !line.contains(",")) {
-                            delimiter = ';'
-                        } else if (line.count { it == ';' } > line.count { it == ',' }) {
-                            delimiter = ';'
-                        }
-                    }
-                    
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            csvLines.add(parseCsvLine(line, delimiter))
-                        }
-                        line = reader.readLine()
-                    }
-                    
-                    if (csvLines.isNotEmpty()) {
+                    val excelOrCsvLines = readExcelOrCsvInputStream(inputStream)
+                    if (excelOrCsvLines.isNotEmpty()) {
                         viewModel.importCsvData(
-                            csvLines = csvLines,
+                            csvLines = excelOrCsvLines,
                             onSuccess = { added, updated ->
-                                Toast.makeText(context, "Berhasil impor CSV! Baru: $added, Update: $updated", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Berhasil impor data! Baru: $added, Update: $updated", Toast.LENGTH_LONG).show()
                             },
                             onError = { err ->
                                 Toast.makeText(context, "Error Impor: $err", Toast.LENGTH_LONG).show()
                             }
                         )
                     } else {
-                        Toast.makeText(context, "File CSV kosong!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "File Excel/CSV kosong!", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membaca CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Gagal membaca file Excel/CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -511,28 +492,38 @@ fun KelolaBarangTab(viewModel: InventoryViewModel) {
                             Toast.makeText(context, "Tidak ada data untuk diekspor!", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        val header = "nama_barang,kategori,merek,ruang,satuan,stok_awal,stok_tersedia,stok_rusak,sumber_dana,kondisi,keterangan\n"
-                        val sb = StringBuilder(header)
-                        for (item in items) {
-                            sb.append("${escapeCsv(item.namaBarang ?: "")},")
-                              .append("${escapeCsv(item.kategori ?: "")},")
-                              .append("${escapeCsv(item.merekAlat ?: "")},")
-                              .append("${escapeCsv(item.ruang ?: "")},")
-                              .append("${escapeCsv(item.satuan ?: "")},")
-                              .append("${item.stokAwal},")
-                              .append("${item.stokTersedia},")
-                              .append("${item.stokRusak},")
-                              .append("${escapeCsv(item.sumberDana ?: "")},")
-                              .append("${escapeCsv(item.kondisi ?: "")},")
-                              .append("${escapeCsv(item.keterangan ?: "")}\n")
+                        val filename = "Master_Data_General_Lunaris_${System.currentTimeMillis()}.xlsx"
+                        val headers = listOf(
+                            "nama_barang", "kategori", "merek", "ruang", "satuan",
+                            "stok_awal", "stok_tersedia", "stok_rusak", "sumber_dana", "kondisi", "keterangan"
+                        )
+                        val rows = items.map { item ->
+                            listOf(
+                                item.namaBarang ?: "",
+                                item.kategori ?: "",
+                                item.merekAlat ?: "",
+                                item.ruang ?: "",
+                                item.satuan ?: "",
+                                item.stokAwal.toString(),
+                                item.stokTersedia.toString(),
+                                item.stokRusak.toString(),
+                                item.sumberDana ?: "",
+                                item.kondisi ?: "",
+                                item.keterangan ?: ""
+                            )
                         }
+                        val bytes = generateExcelBytes(
+                            title = "Master Data General Lunaris",
+                            headers = headers,
+                            rows = rows
+                        )
                         saveFileToDownloads(
                             context = context,
-                            filename = "Master_Data_General_Lunaris.csv",
-                            mimeType = "text/csv",
-                            bytes = sb.toString().toByteArray(Charsets.UTF_8)
+                            filename = filename,
+                            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            bytes = bytes
                         ) {
-                            Toast.makeText(context, "Data General berhasil diekspor!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Data General berhasil diekspor ke format Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -548,7 +539,7 @@ fun KelolaBarangTab(viewModel: InventoryViewModel) {
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
-                        contentDescription = "Ekspor CSV",
+                        contentDescription = "Ekspor Excel",
                         tint = DeepPurpleText
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -563,18 +554,28 @@ fun KelolaBarangTab(viewModel: InventoryViewModel) {
 
                 Button(
                     onClick = {
-                        val templateFilename = "Template_Impor_General_Lunaris.csv"
-                        val templateMimeType = "text/csv"
-                        val templateContent = "nama_barang,kategori,merek,ruang,satuan,stok_awal,sumber_dana,kondisi,keterangan\n" +
-                                "Laptop ASUS Core i5,Elektronik,ASUS,Lab Komputer 1,Unit,15,BOS Reguler,Sangat Baik,Laptop untuk ujian\n" +
-                                "Kertas HVS A4 80g PaperOne,Logistik,PaperOne,Ruang TU,Rim,100,BOS Reguler,Normal (Terawat),Kertas print laporan"
+                        val templateFilename = "Template_Impor_General_Lunaris.xlsx"
+                        val templateMimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        val headers = listOf(
+                            "nama_barang", "kategori", "merek", "ruang", "satuan",
+                            "stok_awal", "sumber_dana", "kondisi", "keterangan"
+                        )
+                        val templateRows = listOf(
+                            listOf("Laptop ASUS Core i5", "Elektronik", "ASUS", "Lab Komputer 1", "Unit", "15", "BOS Reguler", "Sangat Baik", "Laptop untuk ujian"),
+                            listOf("Kertas HVS A4 80g PaperOne", "Logistik", "PaperOne", "Ruang TU", "Rim", "100", "BOS Reguler", "Normal (Terawat)", "Kertas print laporan")
+                        )
+                        val bytes = generateExcelBytes(
+                            title = "Template Impor Data General Lunaris",
+                            headers = headers,
+                            rows = templateRows
+                        )
                         saveFileToDownloads(
                             context = context,
                             filename = templateFilename,
                             mimeType = templateMimeType,
-                            bytes = templateContent.toByteArray(Charsets.UTF_8)
+                            bytes = bytes
                         ) {
-                            Toast.makeText(context, "Template berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Template Excel (.xlsx) berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -1096,30 +1097,11 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val csvLines = mutableListOf<String>()
-                    var line = reader.readLine()
+                    val rows = readExcelOrCsvInputStream(inputStream)
 
-                    var delimiter = ','
-                    if (line != null) {
-                        if (line.contains(";") && !line.contains(",")) {
-                            delimiter = ';'
-                        } else if (line.count { it == ';' } > line.count { it == ',' }) {
-                            delimiter = ';'
-                        }
-                    }
-
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            csvLines.add(line)
-                        }
-                        line = reader.readLine()
-                    }
-
-                    if (csvLines.isNotEmpty()) {
+                    if (rows.isNotEmpty()) {
                         var addedCount = 0
-                        csvLines.forEachIndexed { idx, rawLine ->
-                            val cols = parseCsvLine(rawLine, delimiter)
+                        rows.forEachIndexed { idx, cols ->
                             val valStr = cols.getOrNull(0)?.trim() ?: ""
                             if (valStr.isNotBlank()) {
                                 val isHeader = idx == 0 && (
@@ -1136,21 +1118,21 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
                         if (addedCount > 0) {
                             Toast.makeText(context, "Berhasil mengimpor $addedCount kategori baru!", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Semua kategori dari file CSV sudah ada!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Semua kategori dari file Excel/CSV sudah ada!", Toast.LENGTH_SHORT).show()
                         }
                     } else {
-                        Toast.makeText(context, "File CSV kosong!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "File Excel/CSV kosong!", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membaca CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Gagal membaca file Excel/CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 0.dp)) {
-            // CSV Import/Export and Template Row
+            // CSV/Excel Import/Export and Template Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1171,7 +1153,7 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
                         .height(44.dp)
                         .testTag("btn_impor_csv_kategori")
                 ) {
-                    Icon(imageVector = Icons.Default.Upload, contentDescription = "Impor CSV", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Default.Upload, contentDescription = "Impor Excel", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Impor", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = DeepPurpleText, maxLines = 1)
                 }
@@ -1182,15 +1164,20 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
                             Toast.makeText(context, "Tidak ada data kategori untuk diekspor!", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        val header = "nama_kategori\n"
-                        val content = categories.joinToString("\n") { "\"${it.name}\"" }
+                        val headers = listOf("nama_kategori")
+                        val rows = categories.map { listOf(it.name) }
+                        val bytes = generateExcelBytes(
+                            title = "Master Data Kategori Barang Lunaris",
+                            headers = headers,
+                            rows = rows
+                        )
                         saveFileToDownloads(
                             context = context,
-                            filename = "Master_Kategori_Lunaris.csv",
-                            mimeType = "text/csv",
-                            bytes = (header + content).toByteArray(Charsets.UTF_8)
+                            filename = "Master_Kategori_Lunaris_${System.currentTimeMillis()}.xlsx",
+                            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            bytes = bytes
                         ) {
-                            Toast.makeText(context, "Data Kategori berhasil diekspor ke folder Download!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Data Kategori berhasil diekspor ke Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -1204,21 +1191,31 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
                         .height(44.dp)
                         .testTag("btn_ekspor_csv_kategori")
                 ) {
-                    Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor CSV", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor Excel", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Ekspor", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = DeepPurpleText, maxLines = 1)
                 }
 
                 Button(
                     onClick = {
-                        val templateContent = "nama_kategori\nPerangkat Utama\nKomponen Hardware"
+                        val headers = listOf("nama_kategori")
+                        val templateRows = listOf(
+                            listOf("Perangkat Utama"),
+                            listOf("Komponen Hardware"),
+                            listOf("Kabel & Adaptor")
+                        )
+                        val bytes = generateExcelBytes(
+                            title = "Template Impor Master Kategori Lunaris",
+                            headers = headers,
+                            rows = templateRows
+                        )
                         saveFileToDownloads(
                             context = context,
-                            filename = "Template_Master_Kategori_Lunaris.csv",
-                            mimeType = "text/csv",
-                            bytes = templateContent.toByteArray(Charsets.UTF_8)
+                            filename = "Template_Master_Kategori_Lunaris.xlsx",
+                            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            bytes = bytes
                         ) {
-                            Toast.makeText(context, "Template Kategori berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Template Excel (.xlsx) Kategori berhasil diunduh!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -1494,31 +1491,12 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val csvLines = mutableListOf<String>()
-                    var line = reader.readLine()
+                    val rows = readExcelOrCsvInputStream(inputStream)
 
-                    var delimiter = ','
-                    if (line != null) {
-                        if (line.contains(";") && !line.contains(",")) {
-                            delimiter = ';'
-                        } else if (line.count { it == ';' } > line.count { it == ',' }) {
-                            delimiter = ';'
-                        }
-                    }
-
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            csvLines.add(line)
-                        }
-                        line = reader.readLine()
-                    }
-
-                    if (csvLines.isNotEmpty()) {
+                    if (rows.isNotEmpty()) {
                         var addedCount = 0
                         val processedInCsv = mutableSetOf<String>()
-                        csvLines.forEachIndexed { idx, rawLine ->
-                            val cols = parseCsvLine(rawLine, delimiter)
+                        rows.forEachIndexed { idx, cols ->
                             val valStr = cols.getOrNull(0)?.trim() ?: ""
                             if (valStr.isNotBlank()) {
                                 val isHeader = idx == 0 && (
@@ -1537,21 +1515,21 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
                         if (addedCount > 0) {
                             Toast.makeText(context, "Berhasil mengimpor $addedCount satuan baru!", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Semua satuan dari file CSV sudah ada!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Semua satuan dari file Excel/CSV sudah ada!", Toast.LENGTH_SHORT).show()
                         }
                     } else {
-                        Toast.makeText(context, "File CSV kosong!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "File Excel/CSV kosong!", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membaca CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Gagal membaca file Excel/CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 0.dp)) {
-            // CSV Import/Export and Template Row
+            // Excel/CSV Import/Export and Template Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1573,7 +1551,7 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
                         .height(44.dp)
                         .testTag("btn_impor_csv_satuan")
                 ) {
-                    Icon(imageVector = Icons.Default.Upload, contentDescription = "Impor CSV", tint = DeepPurpleText, modifier = Modifier.size(14.dp))
+                    Icon(imageVector = Icons.Default.Upload, contentDescription = "Impor Excel", tint = DeepPurpleText, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(2.dp))
                     Text("Impor", fontWeight = FontWeight.Bold, fontSize = 10.sp, color = DeepPurpleText, maxLines = 1)
                 }
@@ -1584,15 +1562,20 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
                             Toast.makeText(context, "Tidak ada data satuan untuk diekspor!", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        val header = "nama_satuan\n"
-                        val content = units.joinToString("\n") { "\"${it.name}\"" }
+                        val headers = listOf("nama_satuan")
+                        val rows = units.map { listOf(it.name) }
+                        val bytes = generateExcelBytes(
+                            title = "Master Data Satuan Barang Lunaris",
+                            headers = headers,
+                            rows = rows
+                        )
                         saveFileToDownloads(
                             context = context,
-                            filename = "Master_Satuan_Lunaris.csv",
-                            mimeType = "text/csv",
-                            bytes = (header + content).toByteArray(Charsets.UTF_8)
+                            filename = "Master_Satuan_Lunaris_${System.currentTimeMillis()}.xlsx",
+                            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            bytes = bytes
                         ) {
-                            Toast.makeText(context, "Data Satuan berhasil diekspor ke folder Download!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Data Satuan berhasil diekspor ke Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -1607,21 +1590,33 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
                         .height(44.dp)
                         .testTag("btn_ekspor_csv_satuan")
                 ) {
-                    Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor CSV", tint = DeepPurpleText, modifier = Modifier.size(14.dp))
+                    Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor Excel", tint = DeepPurpleText, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(2.dp))
                     Text("Ekspor", fontWeight = FontWeight.Bold, fontSize = 10.sp, color = DeepPurpleText, maxLines = 1)
                 }
 
                 Button(
                     onClick = {
-                        val templateContent = "nama_satuan\nUnit\nPcs\nBox"
+                        val headers = listOf("nama_satuan")
+                        val templateRows = listOf(
+                            listOf("Unit"),
+                            listOf("Pcs"),
+                            listOf("Box"),
+                            listOf("Roll"),
+                            listOf("Set")
+                        )
+                        val bytes = generateExcelBytes(
+                            title = "Template Impor Master Satuan Lunaris",
+                            headers = headers,
+                            rows = templateRows
+                        )
                         saveFileToDownloads(
                             context = context,
-                            filename = "Template_Master_Satuan_Lunaris.csv",
-                            mimeType = "text/csv",
-                            bytes = templateContent.toByteArray(Charsets.UTF_8)
+                            filename = "Template_Master_Satuan_Lunaris.xlsx",
+                            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            bytes = bytes
                         ) {
-                            Toast.makeText(context, "Template Satuan berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Template Excel (.xlsx) Satuan berhasil diunduh!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -2031,30 +2026,11 @@ fun KelolaSimpleListTab(
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val csvLines = mutableListOf<String>()
-                    var line = reader.readLine()
+                    val rows = readExcelOrCsvInputStream(inputStream)
 
-                    var delimiter = ','
-                    if (line != null) {
-                        if (line.contains(";") && !line.contains(",")) {
-                            delimiter = ';'
-                        } else if (line.count { it == ';' } > line.count { it == ',' }) {
-                            delimiter = ';'
-                        }
-                    }
-
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            csvLines.add(line)
-                        }
-                        line = reader.readLine()
-                    }
-
-                    if (csvLines.isNotEmpty()) {
+                    if (rows.isNotEmpty()) {
                         val parsedItems = mutableListOf<String>()
-                        csvLines.forEachIndexed { idx, rawLine ->
-                            val cols = parseCsvLine(rawLine, delimiter)
+                        rows.forEachIndexed { idx, cols ->
                             val valStr = cols.getOrNull(0)?.trim() ?: ""
                             if (valStr.isNotBlank()) {
                                 // Skip header line if first row contains header keywords
@@ -2083,24 +2059,24 @@ fun KelolaSimpleListTab(
                                 onSave(mutableCurrent)
                                 Toast.makeText(context, "Berhasil mengimpor $addedCount data $menuName!", Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "Semua data $menuName dari file CSV sudah ada!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Semua data $menuName dari file Excel/CSV sudah ada!", Toast.LENGTH_SHORT).show()
                             }
                         } else {
-                            Toast.makeText(context, "Tidak ada data $menuName yang valid dalam file CSV!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Tidak ada data $menuName yang valid dalam file Excel/CSV!", Toast.LENGTH_SHORT).show()
                         }
                     } else {
-                        Toast.makeText(context, "File CSV kosong!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "File Excel/CSV kosong!", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membaca CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Gagal membaca file Excel/CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 0.dp)) {
-            // CSV Import/Export and Template Row
+            // Excel/CSV Import/Export and Template Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2121,7 +2097,7 @@ fun KelolaSimpleListTab(
                         .height(44.dp)
                         .testTag("btn_impor_csv_${testTagPrefix}")
                 ) {
-                    Icon(imageVector = Icons.Default.Upload, contentDescription = "Impor CSV", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Default.Upload, contentDescription = "Impor Excel", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Impor", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = DeepPurpleText, maxLines = 1)
                 }
@@ -2132,15 +2108,21 @@ fun KelolaSimpleListTab(
                             Toast.makeText(context, "Tidak ada data $menuName untuk diekspor!", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        val header = "nama_${menuName.lowercase().replace(" ", "_")}\n"
-                        val content = items.joinToString("\n") { "\"$it\"" }
+                        val headerName = "nama_${menuName.lowercase().replace(" ", "_")}"
+                        val headers = listOf(headerName)
+                        val rows = items.map { listOf(it) }
+                        val bytes = generateExcelBytes(
+                            title = "Master Data $menuName Lunaris",
+                            headers = headers,
+                            rows = rows
+                        )
                         saveFileToDownloads(
                             context = context,
-                            filename = "Master_${menuName.replace(" ", "_")}_Lunaris.csv",
-                            mimeType = "text/csv",
-                            bytes = (header + content).toByteArray(Charsets.UTF_8)
+                            filename = "Master_${menuName.replace(" ", "_")}_Lunaris_${System.currentTimeMillis()}.xlsx",
+                            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            bytes = bytes
                         ) {
-                            Toast.makeText(context, "Data $menuName berhasil diekspor ke folder Download!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Data $menuName berhasil diekspor ke Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -2154,23 +2136,32 @@ fun KelolaSimpleListTab(
                         .height(44.dp)
                         .testTag("btn_ekspor_csv_${testTagPrefix}")
                 ) {
-                    Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor CSV", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor Excel", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Ekspor", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = DeepPurpleText, maxLines = 1)
                 }
 
                 Button(
                     onClick = {
-                        val templateContent = "nama_${menuName.lowercase().replace(" ", "_")}\n" +
-                                "Contoh $menuName 1\n" +
-                                "Contoh $menuName 2"
+                        val headerName = "nama_${menuName.lowercase().replace(" ", "_")}"
+                        val headers = listOf(headerName)
+                        val templateRows = listOf(
+                            listOf("Contoh $menuName 1"),
+                            listOf("Contoh $menuName 2"),
+                            listOf("Contoh $menuName 3")
+                        )
+                        val bytes = generateExcelBytes(
+                            title = "Template Impor Master $menuName Lunaris",
+                            headers = headers,
+                            rows = templateRows
+                        )
                         saveFileToDownloads(
                             context = context,
-                            filename = "Template_Master_${menuName.replace(" ", "_")}_Lunaris.csv",
-                            mimeType = "text/csv",
-                            bytes = templateContent.toByteArray(Charsets.UTF_8)
+                            filename = "Template_Master_${menuName.replace(" ", "_")}_Lunaris.xlsx",
+                            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            bytes = bytes
                         ) {
-                            Toast.makeText(context, "Template $menuName berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Template Excel (.xlsx) $menuName berhasil diunduh!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -2452,31 +2443,13 @@ fun KelolaGuruMapelTab(
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val csvLines = mutableListOf<List<String>>()
-                    var line = reader.readLine()
+                    val rows = readExcelOrCsvInputStream(inputStream)
                     
-                    var delimiter = ','
-                    if (line != null) {
-                        if (line.contains(";") && !line.contains(",")) {
-                            delimiter = ';'
-                        } else if (line.count { it == ';' } > line.count { it == ',' }) {
-                            delimiter = ';'
-                        }
-                    }
-                    
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            csvLines.add(parseCsvLine(line, delimiter))
-                        }
-                        line = reader.readLine()
-                    }
-                    
-                    if (csvLines.isNotEmpty()) {
-                        val hasHeader = csvLines.firstOrNull()?.any { 
+                    if (rows.isNotEmpty()) {
+                        val hasHeader = rows.firstOrNull()?.any { 
                             it.contains("nama", ignoreCase = true) || it.contains("nip", ignoreCase = true) || it.contains("guru", ignoreCase = true) || it.contains("mapel", ignoreCase = true)
                         } ?: false
-                        val rowsToPreview = if (hasHeader && csvLines.size > 1) csvLines.drop(1) else csvLines
+                        val rowsToPreview = if (hasHeader && rows.size > 1) rows.drop(1) else rows
                         
                         val parsed = rowsToPreview.map { cols ->
                             val nama = cols.getOrNull(0) ?: ""
@@ -2488,14 +2461,14 @@ fun KelolaGuruMapelTab(
                         if (parsed.isNotEmpty()) {
                             csvPreviewGuru = parsed
                         } else {
-                            Toast.makeText(context, "Tidak ada data guru yang valid dalam file CSV!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Tidak ada data guru yang valid dalam file Excel/CSV!", Toast.LENGTH_SHORT).show()
                         }
                     } else {
-                        Toast.makeText(context, "File CSV kosong!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "File Excel/CSV kosong!", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membaca CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Gagal membaca file Excel/CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -2534,21 +2507,26 @@ fun KelolaGuruMapelTab(
                         Toast.makeText(context, "Tidak ada data guru untuk diekspor!", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-                    val header = "nama_guru,nip,mata_pelajaran\n"
-                    val content = items.joinToString("\n") { rawItem ->
+                    val headers = listOf("nama_guru", "nip", "mata_pelajaran")
+                    val rows = items.map { rawItem ->
                         val parts = rawItem.split("|:|")
                         val nama = parts.getOrNull(0) ?: rawItem
                         val nip = if (parts.size >= 3) parts.getOrNull(1) ?: "" else ""
                         val mapel = if (parts.size >= 3) parts.getOrNull(2) ?: "" else parts.getOrNull(1) ?: ""
-                        "\"$nama\",\"$nip\",\"$mapel\""
+                        listOf(nama, nip, mapel)
                     }
+                    val bytes = generateExcelBytes(
+                        title = "Daftar Guru & Mata Pelajaran Lunaris",
+                        headers = headers,
+                        rows = rows
+                    )
                     saveFileToDownloads(
                         context = context,
-                        filename = "Daftar_Guru_Mapel_Lunaris.csv",
-                        mimeType = "text/csv",
-                        bytes = (header + content).toByteArray(Charsets.UTF_8)
+                        filename = "Daftar_Guru_Mapel_Lunaris_${System.currentTimeMillis()}.xlsx",
+                        mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        bytes = bytes
                     ) {
-                        Toast.makeText(context, "Daftar Guru berhasil diekspor ke folder Download!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Daftar Guru berhasil diekspor ke Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                     }
                 },
                 colors = ButtonDefaults.buttonColors(
@@ -2562,23 +2540,31 @@ fun KelolaGuruMapelTab(
                     .height(44.dp)
                     .testTag("btn_ekspor_csv_guru")
             ) {
-                Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor CSV", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
+                Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor Excel", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Ekspor", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = DeepPurpleText, maxLines = 1)
             }
 
             Button(
                 onClick = {
-                    val templateContent = "nama_guru,nip,mata_pelajaran\n" +
-                            "Dr. Budi Santoso, M.Pd,198503152010011002,Fisika\n" +
-                            "Siti Aminah, S.Pd,,Matematika"
+                    val headers = listOf("nama_guru", "nip", "mata_pelajaran")
+                    val templateRows = listOf(
+                        listOf("Dr. Budi Santoso, M.Pd", "198503152010011002", "Fisika"),
+                        listOf("Siti Aminah, S.Pd", "", "Matematika"),
+                        listOf("Ahmad Rifai, S.Kom", "199208102019031005", "Pemrograman Web")
+                    )
+                    val bytes = generateExcelBytes(
+                        title = "Template Impor Data Guru Lunaris",
+                        headers = headers,
+                        rows = templateRows
+                    )
                     saveFileToDownloads(
                         context = context,
-                        filename = "Template_Impor_Guru_Lunaris.csv",
-                        mimeType = "text/csv",
-                        bytes = templateContent.toByteArray(Charsets.UTF_8)
+                        filename = "Template_Impor_Guru_Lunaris.xlsx",
+                        mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        bytes = bytes
                     ) {
-                        Toast.makeText(context, "Template berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Template Excel (.xlsx) Guru berhasil diunduh!", Toast.LENGTH_SHORT).show()
                     }
                 },
                 colors = ButtonDefaults.buttonColors(
@@ -3004,31 +2990,13 @@ fun KelolaStafTab(
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val csvLines = mutableListOf<List<String>>()
-                    var line = reader.readLine()
+                    val rows = readExcelOrCsvInputStream(inputStream)
                     
-                    var delimiter = ','
-                    if (line != null) {
-                        if (line.contains(";") && !line.contains(",")) {
-                            delimiter = ';'
-                        } else if (line.count { it == ';' } > line.count { it == ',' }) {
-                            delimiter = ';'
-                        }
-                    }
-                    
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            csvLines.add(parseCsvLine(line, delimiter))
-                        }
-                        line = reader.readLine()
-                    }
-                    
-                    if (csvLines.isNotEmpty()) {
-                        val hasHeader = csvLines.firstOrNull()?.any { 
+                    if (rows.isNotEmpty()) {
+                        val hasHeader = rows.firstOrNull()?.any { 
                             it.contains("nama", ignoreCase = true) || it.contains("nip", ignoreCase = true) || it.contains("staf", ignoreCase = true) || it.contains("jabatan", ignoreCase = true)
                         } ?: false
-                        val rowsToPreview = if (hasHeader && csvLines.size > 1) csvLines.drop(1) else csvLines
+                        val rowsToPreview = if (hasHeader && rows.size > 1) rows.drop(1) else rows
                         
                         val parsed = rowsToPreview.map { cols ->
                             val nama = cols.getOrNull(0) ?: ""
@@ -3040,14 +3008,14 @@ fun KelolaStafTab(
                         if (parsed.isNotEmpty()) {
                             csvPreviewStaf = parsed
                         } else {
-                            Toast.makeText(context, "Tidak ada data staf yang valid dalam file CSV!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Tidak ada data staf yang valid dalam file Excel/CSV!", Toast.LENGTH_SHORT).show()
                         }
                     } else {
-                        Toast.makeText(context, "File CSV kosong!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "File Excel/CSV kosong!", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membaca CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Gagal membaca file Excel/CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -3086,21 +3054,26 @@ fun KelolaStafTab(
                         Toast.makeText(context, "Tidak ada data staf untuk diekspor!", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-                    val header = "nama_staf,nip,jabatan\n"
-                    val content = items.joinToString("\n") { rawItem ->
+                    val headers = listOf("nama_staf", "nip", "jabatan")
+                    val rows = items.map { rawItem ->
                         val parts = rawItem.split("|:|")
                         val nama = parts.getOrNull(0) ?: rawItem
                         val nip = if (parts.size >= 3) parts.getOrNull(1) ?: "" else ""
                         val jabatan = if (parts.size >= 3) parts.getOrNull(2) ?: "" else parts.getOrNull(1) ?: ""
-                        "\"$nama\",\"$nip\",\"$jabatan\""
+                        listOf(nama, nip, jabatan)
                     }
+                    val bytes = generateExcelBytes(
+                        title = "Daftar Staf & Tenaga Kependidikan Lunaris",
+                        headers = headers,
+                        rows = rows
+                    )
                     saveFileToDownloads(
                         context = context,
-                        filename = "Daftar_Staf_Lunaris.csv",
-                        mimeType = "text/csv",
-                        bytes = (header + content).toByteArray(Charsets.UTF_8)
+                        filename = "Daftar_Staf_Lunaris_${System.currentTimeMillis()}.xlsx",
+                        mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        bytes = bytes
                     ) {
-                        Toast.makeText(context, "Daftar Staf berhasil diekspor ke folder Download!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Daftar Staf berhasil diekspor ke Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                     }
                 },
                 colors = ButtonDefaults.buttonColors(
@@ -3114,23 +3087,31 @@ fun KelolaStafTab(
                     .height(44.dp)
                     .testTag("btn_ekspor_csv_staf")
             ) {
-                Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor CSV", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
+                Icon(imageVector = Icons.Default.Download, contentDescription = "Ekspor Excel", tint = DeepPurpleText, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Ekspor", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = DeepPurpleText, maxLines = 1)
             }
 
             Button(
                 onClick = {
-                    val templateContent = "nama_staf,nip,jabatan\n" +
-                            "Ahmad Subagyo, S.E,197812042005011001,Kepala Tata Usaha\n" +
-                            "Dewi Lestari,,Staf Administrasi"
+                    val headers = listOf("nama_staf", "nip", "jabatan")
+                    val templateRows = listOf(
+                        listOf("Ahmad Subagyo, S.E", "197812042005011001", "Kepala Tata Usaha"),
+                        listOf("Dewi Lestari", "", "Staf Administrasi"),
+                        listOf("Bambang Hermawan", "198305112009021003", "Teknisi Laboratorium")
+                    )
+                    val bytes = generateExcelBytes(
+                        title = "Template Impor Data Staf Lunaris",
+                        headers = headers,
+                        rows = templateRows
+                    )
                     saveFileToDownloads(
                         context = context,
-                        filename = "Template_Impor_Staf_Lunaris.csv",
-                        mimeType = "text/csv",
-                        bytes = templateContent.toByteArray(Charsets.UTF_8)
+                        filename = "Template_Impor_Staf_Lunaris.xlsx",
+                        mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        bytes = bytes
                     ) {
-                        Toast.makeText(context, "Template berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Template Excel (.xlsx) Staf berhasil diunduh!", Toast.LENGTH_SHORT).show()
                     }
                 },
                 colors = ButtonDefaults.buttonColors(

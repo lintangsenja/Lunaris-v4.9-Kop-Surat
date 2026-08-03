@@ -190,40 +190,41 @@ fun LabKomScreen(
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
+                    val rows = readExcelOrCsvInputStream(inputStream)
                     val importedUnits = mutableListOf<PcUnitData>()
-                    var line = reader.readLine()
-                    var delimiter = ','
-                    if (line != null && line.contains(";")) delimiter = ';'
                     
-                    line = reader.readLine()
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            val cols = parseCsvLine(line, delimiter)
-                            if (cols.size >= 3) {
+                    if (rows.isNotEmpty()) {
+                        val dataRows = if (rows.firstOrNull()?.getOrNull(0)?.contains("Jenis", ignoreCase = true) == true ||
+                                          rows.firstOrNull()?.getOrNull(0)?.contains("Perangkat", ignoreCase = true) == true) {
+                            rows.drop(1)
+                        } else {
+                            rows
+                        }
+                        
+                        for (cols in dataRows) {
+                            if (cols.size >= 3 && cols.any { it.isNotBlank() }) {
                                 val newUnit = PcUnitData(
-                                    jenisPerangkat = cols.getOrElse(0) { "PC Desktop" },
+                                    jenisPerangkat = cols.getOrElse(0) { "PC Desktop" }.ifBlank { "PC Desktop" },
                                     serialNumber = cols.getOrElse(1) { "" },
-                                    name = cols.getOrElse(2) { "PC Lab" },
-                                    id = cols.getOrElse(3) { "PC-LAB-${System.currentTimeMillis() % 10000}" },
+                                    name = cols.getOrElse(2) { "PC Lab" }.ifBlank { "PC Lab" },
+                                    id = cols.getOrElse(3) { "" }.ifBlank { "PC-LAB-${System.currentTimeMillis() % 10000}" },
                                     merek = cols.getOrElse(4) { "" },
-                                    tipeRam = cols.getOrElse(5) { "DDR4" },
-                                    kapasitasRam = cols.getOrElse(6) { "8 GB" },
-                                    storage = cols.getOrElse(7) { "SSD NVMe" },
-                                    kapasitasStorage = cols.getOrElse(8) { "256 GB" },
+                                    tipeRam = cols.getOrElse(5) { "DDR4" }.ifBlank { "DDR4" },
+                                    kapasitasRam = cols.getOrElse(6) { "8 GB" }.ifBlank { "8 GB" },
+                                    storage = cols.getOrElse(7) { "SSD NVMe" }.ifBlank { "SSD NVMe" },
+                                    kapasitasStorage = cols.getOrElse(8) { "256 GB" }.ifBlank { "256 GB" },
                                     processor = cols.getOrElse(9) { "" },
-                                    layarInch = cols.getOrElse(10) { "24 Inch" },
-                                    labRoom = cols.getOrElse(11) { "Lab Komputer 1" },
-                                    status = cols.getOrElse(12) { "Baik / Normal" },
+                                    layarInch = cols.getOrElse(10) { "24 Inch" }.ifBlank { "24 Inch" },
+                                    labRoom = cols.getOrElse(11) { "Lab Komputer 1" }.ifBlank { "Lab Komputer 1" },
+                                    status = cols.getOrElse(12) { "Baik / Normal" }.ifBlank { "Baik / Normal" },
                                     sumberDana = cols.getOrElse(13) { "BOS" },
                                     qty = cols.getOrElse(14) { "1" }.toIntOrNull() ?: 1,
-                                    satuan = cols.getOrElse(15) { "Unit" },
+                                    satuan = cols.getOrElse(15) { "Unit" }.ifBlank { "Unit" },
                                     keterangan = cols.getOrElse(16) { "" }
                                 )
                                 importedUnits.add(newUnit)
                             }
                         }
-                        line = reader.readLine()
                     }
                     if (importedUnits.isNotEmpty()) {
                         coroutineScope.launch {
@@ -501,37 +502,46 @@ fun LabKomScreen(
                     OutlinedButton(
                         onClick = {
                             coroutineScope.launch(Dispatchers.IO) {
-                                val filename = "Data_PC_LabKom_Lunaris_${System.currentTimeMillis()}.csv"
-                                val header = "Jenis Perangkat,SN,Nama Perangkat,ID Perangkat,Merek,Tipe RAM,Kapasitas RAM,Storage,Kapasitas,Processor,Layar,Ruang,Kondisi,Sumber Dana,Qty,Satuan,Keterangan\n"
-                                val sb = StringBuilder(header)
-                                for (unit in pcUnitsList) {
-                                    sb.append("${escapeCsv(unit.jenisPerangkat)},")
-                                      .append("${escapeCsv(unit.serialNumber)},")
-                                      .append("${escapeCsv(unit.name)},")
-                                      .append("${escapeCsv(unit.id)},")
-                                      .append("${escapeCsv(unit.merek)},")
-                                      .append("${escapeCsv(unit.tipeRam)},")
-                                      .append("${escapeCsv(unit.kapasitasRam)},")
-                                      .append("${escapeCsv(unit.storage)},")
-                                      .append("${escapeCsv(unit.kapasitasStorage)},")
-                                      .append("${escapeCsv(unit.processor)},")
-                                      .append("${escapeCsv(unit.layarInch)},")
-                                      .append("${escapeCsv(unit.labRoom)},")
-                                      .append("${escapeCsv(unit.status)},")
-                                      .append("${escapeCsv(unit.sumberDana)},")
-                                      .append("${unit.qty},")
-                                      .append("${escapeCsv(unit.satuan)},")
-                                      .append("${escapeCsv(unit.keterangan)}\n")
+                                val filename = "Data_PC_LabKom_Lunaris_${System.currentTimeMillis()}.xlsx"
+                                val headers = listOf(
+                                    "Jenis Perangkat", "SN", "Nama Perangkat", "ID Perangkat", "Merek",
+                                    "Tipe RAM", "Kapasitas RAM", "Storage", "Kapasitas", "Processor",
+                                    "Layar", "Ruang", "Kondisi", "Sumber Dana", "Qty", "Satuan", "Keterangan"
+                                )
+                                val rows = pcUnitsList.map { unit ->
+                                    listOf(
+                                        unit.jenisPerangkat,
+                                        unit.serialNumber,
+                                        unit.name,
+                                        unit.id,
+                                        unit.merek,
+                                        unit.tipeRam,
+                                        unit.kapasitasRam,
+                                        unit.storage,
+                                        unit.kapasitasStorage,
+                                        unit.processor,
+                                        unit.layarInch,
+                                        unit.labRoom,
+                                        unit.status,
+                                        unit.sumberDana,
+                                        unit.qty.toString(),
+                                        unit.satuan,
+                                        unit.keterangan
+                                    )
                                 }
-                                val bytes = sb.toString().toByteArray(Charsets.UTF_8)
+                                val bytes = generateExcelBytes(
+                                    title = "Data Perangkat Laboratorium Komputer Lunaris",
+                                    headers = headers,
+                                    rows = rows
+                                )
                                 withContext(Dispatchers.Main) {
                                     saveFileToDownloads(
                                         context = context,
                                         filename = filename,
-                                        mimeType = "text/csv",
+                                        mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         bytes = bytes
                                     ) {
-                                        Toast.makeText(context, "Seluruh data PC LabKom berhasil diekspor!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Seluruh data PC LabKom berhasil diekspor ke Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -548,17 +558,29 @@ fun LabKomScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val templateFilename = "Template_Impor_LabKom_Lunaris.csv"
-                            val templateContent = "Jenis Perangkat,SN,Nama Perangkat,ID Perangkat,Merek,Tipe RAM,Kapasitas RAM,Storage,Kapasitas,Processor,Layar,Ruang,Kondisi,Sumber Dana,Qty,Satuan,Keterangan\n" +
-                                    "PC Desktop,SN-ASUS-2026-001,PC LabKom 01,PC-LAB1-001,Asus,DDR4,16 GB,SSD NVMe,512 GB,Intel Core i5-10400F @ 2.90GHz,24 Inch,Lab Komputer 1,Baik / Normal,BOS,1,Unit,Unit PC Siap Pakai Praktikum\n" +
-                                    "Workstation,SN-DELL-2026-089,Workstation Design 02,PC-LAB2-002,Dell,DDR4,32 GB,SSD NVMe,1 TB,Intel Core i7-12700K @ 3.60GHz,27 Inch,Lab Komputer 2,Baik / Normal,BOS Reguler,1,Unit,Unit PC High End Grafis\n"
+                            val templateFilename = "Template_Impor_LabKom_Lunaris.xlsx"
+                            val templateMimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            val headers = listOf(
+                                "Jenis Perangkat", "SN", "Nama Perangkat", "ID Perangkat", "Merek",
+                                "Tipe RAM", "Kapasitas RAM", "Storage", "Kapasitas", "Processor",
+                                "Layar", "Ruang", "Kondisi", "Sumber Dana", "Qty", "Satuan", "Keterangan"
+                            )
+                            val templateRows = listOf(
+                                listOf("PC Desktop", "SN-ASUS-2026-001", "PC LabKom 01", "PC-LAB1-001", "Asus", "DDR4", "16 GB", "SSD NVMe", "512 GB", "Intel Core i5-10400F @ 2.90GHz", "24 Inch", "Lab Komputer 1", "Baik / Normal", "BOS", "1", "Unit", "Unit PC Siap Pakai Praktikum"),
+                                listOf("Workstation", "SN-DELL-2026-089", "Workstation Design 02", "PC-LAB2-002", "Dell", "DDR4", "32 GB", "SSD NVMe", "1 TB", "Intel Core i7-12700K @ 3.60GHz", "27 Inch", "Lab Komputer 2", "Baik / Normal", "BOS Reguler", "1", "Unit", "Unit PC High End Grafis")
+                            )
+                            val bytes = generateExcelBytes(
+                                title = "Template Impor Data PC Laboratorium Lunaris",
+                                headers = headers,
+                                rows = templateRows
+                            )
                             saveFileToDownloads(
                                 context = context,
                                 filename = templateFilename,
-                                mimeType = "text/csv",
-                                bytes = templateContent.toByteArray(Charsets.UTF_8)
+                                mimeType = templateMimeType,
+                                bytes = bytes
                             ) {
-                                Toast.makeText(context, "Template Impor LabKom berhasil diunduh!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Template Excel (.xlsx) LabKom berhasil diunduh!", Toast.LENGTH_SHORT).show()
                             }
                         },
                         shape = RoundedCornerShape(10.dp),

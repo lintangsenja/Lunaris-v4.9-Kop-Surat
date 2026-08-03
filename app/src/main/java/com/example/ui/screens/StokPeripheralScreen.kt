@@ -89,42 +89,23 @@ fun StokPeripheralScreen(
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val csvLines = mutableListOf<List<String>>()
-                    var line = reader.readLine()
-                    
-                    var delimiter = ','
-                    if (line != null) {
-                        if (line.contains(";") && !line.contains(",")) {
-                            delimiter = ';'
-                        } else if (line.count { it == ';' } > line.count { it == ',' }) {
-                            delimiter = ';'
-                        }
-                    }
-                    
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            csvLines.add(parseCsvLine(line, delimiter))
-                        }
-                        line = reader.readLine()
-                    }
-                    
-                    if (csvLines.isNotEmpty()) {
+                    val excelOrCsvLines = readExcelOrCsvInputStream(inputStream)
+                    if (excelOrCsvLines.isNotEmpty()) {
                         viewModel.importPeripheralCsvData(
-                            csvLines = csvLines,
+                            csvLines = excelOrCsvLines,
                             onSuccess = { added, updated ->
-                                Toast.makeText(context, "Berhasil Impor CSV Peripheral! Baru: $added, Update: $updated", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Berhasil Impor Data Peripheral! Baru: $added, Update: $updated", Toast.LENGTH_LONG).show()
                             },
                             onError = { err ->
                                 Toast.makeText(context, "Error Impor Peripheral: $err", Toast.LENGTH_LONG).show()
                             }
                         )
                     } else {
-                        Toast.makeText(context, "File CSV kosong!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "File Excel/CSV kosong!", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membaca CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Gagal membaca file Excel/CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -410,32 +391,40 @@ fun StokPeripheralScreen(
                     OutlinedButton(
                         onClick = {
                             coroutineScope.launch(Dispatchers.IO) {
-                                val filename = "Data_Peripheral_Lunaris_${System.currentTimeMillis()}.csv"
-                                val header = "id_barang,jenis_peripheral,nama_item,merek,spesifikasi,satuan,jumlah,tanggal_masuk,sumber_dana,lokasi_ruang,kondisi,serial_number\n"
-                                val sb = StringBuilder(header)
-                                for (item in peripheralStocks) {
-                                    sb.append("${escapeCsv(item.idBarang)},")
-                                      .append("${escapeCsv(item.jenisPeripheral)},")
-                                      .append("${escapeCsv(item.namaItem)},")
-                                      .append("${escapeCsv(item.merek)},")
-                                      .append("${escapeCsv(item.spesifikasi)},")
-                                      .append("${escapeCsv(item.satuan)},")
-                                      .append("${item.jumlah},")
-                                      .append("${escapeCsv(item.tanggalMasuk)},")
-                                      .append("${escapeCsv(item.sumberDana)},")
-                                      .append("${escapeCsv(item.lokasiRuang)},")
-                                      .append("${escapeCsv(item.kondisi)},")
-                                      .append("${escapeCsv(item.serialNumber)}\n")
+                                val filename = "Data_Peripheral_Lunaris_${System.currentTimeMillis()}.xlsx"
+                                val headers = listOf(
+                                    "id_barang", "jenis_peripheral", "nama_item", "merek", "spesifikasi",
+                                    "satuan", "jumlah", "tanggal_masuk", "sumber_dana", "lokasi_ruang", "kondisi", "serial_number"
+                                )
+                                val rows = peripheralStocks.map { item ->
+                                    listOf(
+                                        item.idBarang,
+                                        item.jenisPeripheral,
+                                        item.namaItem,
+                                        item.merek,
+                                        item.spesifikasi,
+                                        item.satuan,
+                                        item.jumlah.toString(),
+                                        item.tanggalMasuk,
+                                        item.sumberDana,
+                                        item.lokasiRuang,
+                                        item.kondisi,
+                                        item.serialNumber
+                                    )
                                 }
-                                val bytes = sb.toString().toByteArray(Charsets.UTF_8)
+                                val bytes = generateExcelBytes(
+                                    title = "Data Stok Peripheral Lunaris",
+                                    headers = headers,
+                                    rows = rows
+                                )
                                 withContext(Dispatchers.Main) {
                                     saveFileToDownloads(
                                         context = context,
                                         filename = filename,
-                                        mimeType = "text/csv",
+                                        mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         bytes = bytes
                                     ) {
-                                        Toast.makeText(context, "Data Peripheral berhasil diekspor!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Data Peripheral berhasil diekspor ke format Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -454,20 +443,30 @@ fun StokPeripheralScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val templateFilename = "Template_Impor_Peripheral_Lunaris.csv"
-                            val templateMimeType = "text/csv"
-                            val templateContent = "id_barang,jenis_peripheral,nama_item,merek,spesifikasi,satuan,jumlah,tanggal_masuk,sumber_dana,lokasi_ruang,kondisi,serial_number\n" +
-                                    "PRPH-001,RAM,RAM DDR4 16GB V-Gen Tsunami 3200MHz,V-Gen,DDR4 16GB PC25600,Pcs,10,2026-01-15,BOS Reguler,Lab Komputer 1,Baru,SN-RAM16G-9021\n" +
-                                    "PRPH-002,Storage / Media Penyimpanan,SSD NVMe 512GB Samsung 980,Samsung,M.2 NVMe PCIe 3.0,Pcs,8,2026-02-10,BOS Kinerja,Lab Server / NOC,Sangat Baik,SN-NVME512-8812\n" +
-                                    "PRPH-003,Mouse & Keyboard,Keyboard Mech RGB Outemu Blue,Logitech,Mechanical Wired USB,Set,15,2026-03-01,Bantuan Komite Sekolah,Lab Komputer 2,Baik (Siap Pakai),SN-KBMECH-3321\n" +
-                                    "PRPH-004,UPS & PSU,UPSICA 1200VA 600W LCD,APC,1200VA AVR Battery Backup,Unit,5,2026-03-20,Bantuan Pemda,Lab Server / NOC,Baru,SN-UPS1200-5541"
+                            val templateFilename = "Template_Impor_Peripheral_Lunaris.xlsx"
+                            val templateMimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            val headers = listOf(
+                                "id_barang", "jenis_peripheral", "nama_item", "merek", "spesifikasi",
+                                "satuan", "jumlah", "tanggal_masuk", "sumber_dana", "lokasi_ruang", "kondisi", "serial_number"
+                            )
+                            val templateRows = listOf(
+                                listOf("PRPH-001", "RAM", "RAM DDR4 16GB V-Gen Tsunami 3200MHz", "V-Gen", "DDR4 16GB PC25600", "Pcs", "10", "2026-01-15", "BOS Reguler", "Lab Komputer 1", "Baru", "SN-RAM16G-9021"),
+                                listOf("PRPH-002", "Storage / Media Penyimpanan", "SSD NVMe 512GB Samsung 980", "Samsung", "M.2 NVMe PCIe 3.0", "Pcs", "8", "2026-02-10", "BOS Kinerja", "Lab Server / NOC", "Sangat Baik", "SN-NVME512-8812"),
+                                listOf("PRPH-003", "Mouse & Keyboard", "Keyboard Mech RGB Outemu Blue", "Logitech", "Mechanical Wired USB", "Set", "15", "2026-03-01", "Bantuan Komite Sekolah", "Lab Komputer 2", "Baik (Siap Pakai)", "SN-KBMECH-3321"),
+                                listOf("PRPH-004", "UPS & PSU", "UPSICA 1200VA 600W LCD", "APC", "1200VA AVR Battery Backup", "Unit", "5", "2026-03-20", "Bantuan Pemda", "Lab Server / NOC", "Baru", "SN-UPS1200-5541")
+                            )
+                            val bytes = generateExcelBytes(
+                                title = "Template Impor Data Peripheral Lunaris",
+                                headers = headers,
+                                rows = templateRows
+                            )
                             saveFileToDownloads(
                                 context = context,
                                 filename = templateFilename,
                                 mimeType = templateMimeType,
-                                bytes = templateContent.toByteArray(Charsets.UTF_8)
+                                bytes = bytes
                             ) {
-                                Toast.makeText(context, "Template CSV Peripheral berhasil diunduh!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Template Excel (.xlsx) Peripheral berhasil diunduh!", Toast.LENGTH_SHORT).show()
                             }
                         },
                         shape = RoundedCornerShape(10.dp),

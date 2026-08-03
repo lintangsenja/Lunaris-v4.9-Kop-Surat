@@ -177,43 +177,24 @@ fun AlatScreen(
         if (uri != null) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val csvLines = mutableListOf<List<String>>()
-                    var line = reader.readLine()
-                    
-                    var delimiter = ','
-                    if (line != null) {
-                        if (line.contains(";") && !line.contains(",")) {
-                            delimiter = ';'
-                        } else if (line.count { it == ';' } > line.count { it == ',' }) {
-                            delimiter = ';'
-                        }
-                    }
-                    
-                    while (line != null) {
-                        if (line.isNotBlank()) {
-                            csvLines.add(parseCsvLine(line, delimiter))
-                        }
-                        line = reader.readLine()
-                    }
-                    
-                    if (csvLines.isNotEmpty()) {
+                    val excelOrCsvLines = readExcelOrCsvInputStream(inputStream)
+                    if (excelOrCsvLines.isNotEmpty()) {
                         viewModel.importCsvData(
-                            csvLines = csvLines,
+                            csvLines = excelOrCsvLines,
                             defaultType = "ALAT",
                             onSuccess = { added, updated ->
-                                Toast.makeText(context, "Berhasil impor CSV! Baru: $added, Update: $updated", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Berhasil impor data Alat! Baru: $added, Update: $updated", Toast.LENGTH_LONG).show()
                             },
                             onError = { err ->
                                 Toast.makeText(context, "Error Impor: $err", Toast.LENGTH_LONG).show()
                             }
                         )
                     } else {
-                        Toast.makeText(context, "File CSV kosong!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "File Excel/CSV kosong!", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membaca CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Gagal membaca file Excel/CSV: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -458,31 +439,39 @@ fun AlatScreen(
                             onClick = {
                                 coroutineScope.launch(Dispatchers.IO) {
                                     val alatItems = allItems.filter { it.type == "ALAT" }
-                                    val filename = "Data_Alat_Lunaris_${System.currentTimeMillis()}.csv"
-                                    val header = "nama_alat,kategori,merek,ruang,satuan,stok_awal,stok_tersedia,stok_rusak,sumber_dana,kondisi,keterangan\n"
-                                    val sb = StringBuilder(header)
-                                    for (item in alatItems) {
-                                        sb.append("${escapeCsv(item.namaBarang)},")
-                                          .append("${escapeCsv(item.kategori)},")
-                                          .append("${escapeCsv(item.merekAlat)},")
-                                          .append("${escapeCsv(item.ruang)},")
-                                          .append("${escapeCsv(item.satuan)},")
-                                          .append("${item.stokAwal},")
-                                          .append("${item.stokTersedia},")
-                                          .append("${item.stokRusak},")
-                                          .append("${escapeCsv(item.sumberDana ?: "")},")
-                                          .append("${escapeCsv(item.kondisi)},")
-                                          .append("${escapeCsv(item.keterangan)}\n")
+                                    val filename = "Data_Alat_Lunaris_${System.currentTimeMillis()}.xlsx"
+                                    val headers = listOf(
+                                        "nama_alat", "kategori", "merek", "ruang", "satuan",
+                                        "stok_awal", "stok_tersedia", "stok_rusak", "sumber_dana", "kondisi", "keterangan"
+                                    )
+                                    val rows = alatItems.map { item ->
+                                        listOf(
+                                            item.namaBarang ?: "",
+                                            item.kategori ?: "",
+                                            item.merekAlat ?: "",
+                                            item.ruang ?: "",
+                                            item.satuan ?: "",
+                                            item.stokAwal.toString(),
+                                            item.stokTersedia.toString(),
+                                            item.stokRusak.toString(),
+                                            item.sumberDana ?: "",
+                                            item.kondisi ?: "",
+                                            item.keterangan ?: ""
+                                        )
                                     }
-                                    val bytes = sb.toString().toByteArray(Charsets.UTF_8)
+                                    val bytes = generateExcelBytes(
+                                        title = "Data Master Alat Lunaris",
+                                        headers = headers,
+                                        rows = rows
+                                    )
                                     withContext(Dispatchers.Main) {
                                         saveFileToDownloads(
                                             context = context,
                                             filename = filename,
-                                            mimeType = "text/csv",
+                                            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                             bytes = bytes
                                         ) {
-                                            Toast.makeText(context, "Data Alat berhasil diekspor!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Data Alat berhasil diekspor ke format Excel (.xlsx)!", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }
@@ -501,18 +490,29 @@ fun AlatScreen(
 
                         OutlinedButton(
                             onClick = {
-                                val templateFilename = "Template_Impor_Alat_Lunaris.csv"
-                                val templateMimeType = "text/csv"
-                                val templateContent = "nama_alat,kategori,merek,ruang,satuan,stok_awal,sumber_dana,kondisi,keterangan\n" +
-                                        "Laptop ASUS Core i5,Elektronik,ASUS,Lab Komputer 1,Unit,15,BOS Reguler,Sangat Baik,Laptop untuk ujian\n" +
-                                        "Proyektor Epson EB-X400,Elektronik,Epson,Aula Utama,Unit,15,BOS Kinerja,Baik (Siap Pakai),Proyektor presentasi"
+                                val templateFilename = "Template_Impor_Alat_Lunaris.xlsx"
+                                val templateMimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                val headers = listOf(
+                                    "nama_alat", "kategori", "merek", "ruang", "satuan",
+                                    "stok_awal", "sumber_dana", "kondisi", "keterangan"
+                                )
+                                val templateRows = listOf(
+                                    listOf("Laptop ASUS Core i5", "Elektronik", "ASUS", "Lab Komputer 1", "Unit", "15", "BOS Reguler", "Sangat Baik", "Laptop untuk ujian"),
+                                    listOf("Proyektor Epson EB-X400", "Elektronik", "Epson", "Aula Utama", "Unit", "15", "BOS Kinerja", "Baik (Siap Pakai)", "Proyektor presentasi"),
+                                    listOf("Kamera DSLR Canon EOS 200D", "Elektronik", "Canon", "Studio Foto", "Unit", "5", "BOS Reguler", "Sangat Baik", "Kamera praktek siswa")
+                                )
+                                val bytes = generateExcelBytes(
+                                    title = "Template Impor Data Alat Lunaris",
+                                    headers = headers,
+                                    rows = templateRows
+                                )
                                 saveFileToDownloads(
                                     context = context,
                                     filename = templateFilename,
                                     mimeType = templateMimeType,
-                                    bytes = templateContent.toByteArray(Charsets.UTF_8)
+                                    bytes = bytes
                                 ) {
-                                    Toast.makeText(context, "Template berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Template Excel (.xlsx) berhasil diunduh ke folder Download!", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             shape = RoundedCornerShape(10.dp),

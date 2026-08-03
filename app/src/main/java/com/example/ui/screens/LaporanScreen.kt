@@ -5324,6 +5324,9 @@ fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<Str
     val sheetXml = java.lang.StringBuilder()
     sheetXml.append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <cols>
+    <col min="1" max="25" width="22" customWidth="1"/>
+  </cols>
   <sheetData>
 """)
 
@@ -5465,6 +5468,185 @@ fun generateExcelBytes(title: String, headers: List<String>, rows: List<List<Str
     )
 
     return createZipPackage(entries)
+}
+
+fun readXlsxBytes(bytes: ByteArray): List<List<String>> {
+    val rows = mutableListOf<List<String>>()
+    var sharedStrings = listOf<String>()
+    var sheetBytes: ByteArray? = null
+
+    try {
+        java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                val entryName = entry.name.lowercase(java.util.Locale.ROOT)
+                if (entryName == "xl/sharedstrings.xml") {
+                    sharedStrings = parseSharedStringsXml(zis.readBytes())
+                } else if (sheetBytes == null && (entryName == "xl/worksheets/sheet1.xml" || (entryName.startsWith("xl/worksheets/sheet") && entryName.endsWith(".xml")))) {
+                    sheetBytes = zis.readBytes()
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+
+        if (sheetBytes != null) {
+            rows.addAll(parseSheetXml(sheetBytes!!, sharedStrings))
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+
+    return rows
+}
+
+private fun parseSharedStringsXml(bytes: ByteArray): List<String> {
+    val result = mutableListOf<String>()
+    try {
+        val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+        factory.isNamespaceAware = false
+        val builder = factory.newDocumentBuilder()
+        val doc = builder.parse(java.io.ByteArrayInputStream(bytes))
+        val siList = doc.getElementsByTagName("si")
+        for (i in 0 until siList.length) {
+            val node = siList.item(i)
+            val sb = java.lang.StringBuilder()
+            if (node is org.w3c.dom.Element) {
+                val tList = node.getElementsByTagName("t")
+                if (tList.length > 0) {
+                    for (j in 0 until tList.length) {
+                        sb.append(tList.item(j).textContent ?: "")
+                    }
+                } else {
+                    sb.append(node.textContent ?: "")
+                }
+            } else {
+                sb.append(node?.textContent ?: "")
+            }
+            result.add(sb.toString())
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return result
+}
+
+private fun parseSheetXml(bytes: ByteArray, sharedStrings: List<String>): List<List<String>> {
+    val result = mutableListOf<List<String>>()
+    try {
+        val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+        factory.isNamespaceAware = false
+        val builder = factory.newDocumentBuilder()
+        val doc = builder.parse(java.io.ByteArrayInputStream(bytes))
+        val rowList = doc.getElementsByTagName("row")
+        
+        for (i in 0 until rowList.length) {
+            val rowNode = rowList.item(i) as? org.w3c.dom.Element ?: continue
+            val cList = rowNode.getElementsByTagName("c")
+            val cellMap = mutableMapOf<Int, String>()
+            var maxColIndex = -1
+
+            for (j in 0 until cList.length) {
+                val cElem = cList.item(j) as? org.w3c.dom.Element ?: continue
+                val ref = cElem.getAttribute("r")
+                val type = cElem.getAttribute("t")
+                
+                val colIndex = if (ref.isNotBlank()) parseExcelColIndex(ref) else j
+                if (colIndex > maxColIndex) maxColIndex = colIndex
+
+                val cellValue: String = when (type) {
+                    "s" -> {
+                        val vNode = cElem.getElementsByTagName("v").item(0)
+                        val idx = vNode?.textContent?.trim()?.toIntOrNull()
+                        if (idx != null && idx in sharedStrings.indices) sharedStrings[idx] else ""
+                    }
+                    "inlineStr" -> {
+                        val isNode = cElem.getElementsByTagName("is").item(0) as? org.w3c.dom.Element
+                        val tNode = isNode?.getElementsByTagName("t")?.item(0) ?: cElem.getElementsByTagName("t").item(0)
+                        tNode?.textContent ?: ""
+                    }
+                    else -> {
+                        val vNode = cElem.getElementsByTagName("v").item(0)
+                        val tNode = cElem.getElementsByTagName("t").item(0)
+                        vNode?.textContent ?: tNode?.textContent ?: ""
+                    }
+                }
+                cellMap[colIndex] = cellValue
+            }
+
+            if (maxColIndex >= 0) {
+                val rowData = mutableListOf<String>()
+                for (col in 0..maxColIndex) {
+                    rowData.add(cellMap[col] ?: "")
+                }
+                result.add(rowData)
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return result
+}
+
+private fun parseExcelColIndex(ref: String): Int {
+    val letters = ref.takeWhile { it.isLetter() }.uppercase(java.util.Locale.ROOT)
+    if (letters.isEmpty()) return -1
+    var col = 0
+    for (char in letters) {
+        col = col * 26 + (char - 'A' + 1)
+    }
+    return col - 1
+}
+
+fun readExcelOrCsvInputStream(inputStream: java.io.InputStream): List<List<String>> {
+    val bytes = inputStream.readBytes()
+    if (bytes.isEmpty()) return emptyList()
+
+    try {
+        val rows = readXlsxBytes(bytes)
+        if (rows.isNotEmpty()) {
+            return rows
+        }
+    } catch (_: Exception) {}
+
+    try {
+        val reader = java.io.BufferedReader(java.io.InputStreamReader(java.io.ByteArrayInputStream(bytes)))
+        val csvLines = mutableListOf<List<String>>()
+        var line = reader.readLine()
+        
+        var delimiter = ','
+        if (line != null) {
+            if (line.contains(";") && !line.contains(",")) {
+                delimiter = ';'
+            } else if (line.count { it == ';' } > line.count { it == ',' }) {
+                delimiter = ';'
+            }
+        }
+        
+        while (line != null) {
+            if (line.isNotBlank()) {
+                val cols = mutableListOf<String>()
+                var cur = StringBuilder()
+                var inQuotes = false
+                for (ch in line) {
+                    if (ch == '"') {
+                        inQuotes = !inQuotes
+                    } else if (ch == delimiter && !inQuotes) {
+                        cols.add(cur.toString().trim())
+                        cur = StringBuilder()
+                    } else {
+                        cur.append(ch)
+                    }
+                }
+                cols.add(cur.toString().trim())
+                csvLines.add(cols)
+            }
+            line = reader.readLine()
+        }
+        return csvLines
+    } catch (_: Exception) {
+        return emptyList()
+    }
 }
 
 fun generatePdfBytes(
