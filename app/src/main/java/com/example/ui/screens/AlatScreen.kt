@@ -97,6 +97,10 @@ fun AlatScreen(
     val userRole by viewModel.userRole.collectAsState()
     val studentPermissions by viewModel.studentPermissions.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.forceRefreshState()
+    }
+
     val isAlatAllowed = userRole != "siswa" || (
         studentPermissions["alat"] == true ||
         studentPermissions["alat_view"] == true ||
@@ -154,7 +158,7 @@ fun AlatScreen(
     }
     
     val roomOptions = remember(ruangList, allItems) {
-        val masterRuangs = if (ruangList.isNotEmpty()) ruangList else listOf("Lab Komputer 1", "Lab Komputer 2", "Lab Server / NOC")
+        val masterRuangs = ruangList
         val itemRuangs = allItems.filter { it.kategori != "Logistik" && it.ruang.isNotEmpty() }.map { it.ruang }
         val uniqueRooms = (masterRuangs + itemRuangs).distinct().sorted()
         listOf("Semua Ruang") + uniqueRooms

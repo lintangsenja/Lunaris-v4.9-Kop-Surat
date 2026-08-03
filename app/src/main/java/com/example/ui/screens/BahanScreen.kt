@@ -107,6 +107,7 @@ fun BahanScreen(
     )
 
     LaunchedEffect(Unit) {
+        viewModel.forceRefreshState()
         viewModel.getAllBahan()
     }
 
@@ -690,7 +691,7 @@ fun BahanScreen(
                     LazyColumn(
                         state = lazyListState,
                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(bottom = 160.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)

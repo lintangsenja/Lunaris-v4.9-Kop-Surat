@@ -2489,7 +2489,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
         }
     }
     val masterRuang = remember(ruangList) {
-        if (ruangList.isNotEmpty()) ruangList else listOf("Lab Komputer 1", "Lab Komputer 2", "Lab Server / NOC", "Ruang TU", "Gudang Utama")
+        ruangList
     }
     val masterSumberDana = remember(sumberDanaList) {
         if (sumberDanaList.isNotEmpty()) sumberDanaList else listOf("BOS Reguler", "BOS Kinerja", "Komite Sekolah", "Bantuan Hibah / CSR", "Yayasan / Mandiri")
@@ -2535,7 +2535,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
     var manualLabKomCat by remember { mutableStateOf(labKomMasterCategories.first()) }
     var manualSatuan by remember(units) { mutableStateOf(units.firstOrNull() ?: "Pcs") }
     var manualMerek by remember { mutableStateOf("") }
-    var manualRuang by remember(masterRuang) { mutableStateOf(masterRuang.firstOrNull() ?: "Lab Komputer 1") }
+    var manualRuang by remember(masterRuang) { mutableStateOf(masterRuang.firstOrNull() ?: "") }
     var manualSumberDana by remember(masterSumberDana) { mutableStateOf(masterSumberDana.firstOrNull() ?: "BOS Reguler") }
     var manualKondisi by remember(masterKondisi) { mutableStateOf(masterKondisi.firstOrNull() ?: "Normal / Baik") }
     var manualStok by remember { mutableStateOf("1") }
@@ -3820,7 +3820,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
                                 kategori = manualLabKomCat.trim(),
                                 satuan = manualSatuan.trim().ifEmpty { "Unit" },
                                 merekAlat = manualMerek.trim(),
-                                ruang = manualRuang.trim().ifEmpty { "Lab Komputer 1" },
+                                ruang = manualRuang.trim(),
                                 sumberDana = manualSumberDana.trim().ifEmpty { "BOS Reguler" },
                                 kondisi = manualKondisi.trim().ifEmpty { "Normal / Baik" },
                                 keterangan = fullSpec,
@@ -3863,7 +3863,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
                                 satuan = manualSatuan.trim().ifEmpty { "Unit" },
                                 jumlah = stockInt,
                                 sumberDana = manualSumberDana.trim().ifEmpty { "BOS / Sekolah" },
-                                lokasiRuang = manualRuang.trim().ifEmpty { "Lab Komputer 1" },
+                                lokasiRuang = manualRuang.trim(),
                                 kondisi = manualKondisi.trim().ifEmpty { "Baik" },
                                 serialNumber = manualPeripheralSn.trim(),
                                 onSuccess = {

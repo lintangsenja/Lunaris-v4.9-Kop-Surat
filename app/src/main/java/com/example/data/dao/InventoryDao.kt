@@ -582,6 +582,18 @@ interface InventoryDao {
     @Query("DELETE FROM bahan_afkir WHERE isDemo = 1")
     suspend fun deleteDemoBahanAfkir()
 
+    @Query("DELETE FROM categories WHERE name IS NULL OR TRIM(name) = ''")
+    suspend fun deleteEmptyCategories()
+
+    @Query("DELETE FROM units WHERE name IS NULL OR TRIM(name) = ''")
+    suspend fun deleteEmptyUnits()
+
+    @Query("DELETE FROM items WHERE namaBarang IS NULL OR TRIM(namaBarang) = '' OR idBarang IS NULL OR TRIM(idBarang) = ''")
+    suspend fun deleteEmptyItems()
+
+    @Query("DELETE FROM peripheral_stocks WHERE namaItem IS NULL OR TRIM(namaItem) = ''")
+    suspend fun deleteEmptyPeripheralStocks()
+
     // Backup & Restore Support
     @Query("SELECT * FROM items")
     suspend fun getAllItemsList(): List<ItemEntity>

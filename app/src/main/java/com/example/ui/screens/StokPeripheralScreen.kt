@@ -122,6 +122,10 @@ fun StokPeripheralScreen(
 
     val userRole by viewModel.userRole.collectAsState()
     val studentPermissions by viewModel.studentPermissions.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.forceRefreshState()
+    }
     val canLabKomView = userRole.contains("admin", ignoreCase = true) || viewModel.isStudentPermissionGranted("labkom_view", studentPermissions)
     val canLabKomManage = userRole.contains("admin", ignoreCase = true) || viewModel.isStudentPermissionGranted("labkom_manage", studentPermissions)
 
@@ -146,10 +150,7 @@ fun StokPeripheralScreen(
     }
 
     val masterRuang = remember(ruangList) {
-        if (ruangList.isNotEmpty()) ruangList else {
-            val list = viewModel.settingsRepository.getRuang()
-            if (list.isNotEmpty()) list else listOf("Lab Komputer 1", "Lab Komputer 2", "Lab Server / NOC", "Gudang Sarpras", "Ruang TU")
-        }
+        ruangList
     }
 
     val masterSumberDana = remember(sumberDanaList) {
@@ -793,7 +794,9 @@ fun StokPeripheralScreen(
                     }
 
                     LazyColumn(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
@@ -1506,7 +1509,7 @@ private fun PeripheralStockFormDialog(
         mutableStateOf(initialItem?.tanggalMasuk ?: SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()))
     }
     var sumberDana by remember { mutableStateOf(initialItem?.sumberDana ?: (masterSumberDana.firstOrNull() ?: "BOS Reguler")) }
-    var lokasiRuang by remember { mutableStateOf(initialItem?.lokasiRuang ?: (masterRuang.firstOrNull() ?: "Lab Komputer 1")) }
+    var lokasiRuang by remember { mutableStateOf(initialItem?.lokasiRuang ?: (masterRuang.firstOrNull() ?: "")) }
     var kondisi by remember { mutableStateOf(initialItem?.kondisi ?: (masterKondisi.firstOrNull() ?: "Baru")) }
     var serialNumber by remember { mutableStateOf(initialItem?.serialNumber ?: "") }
 
@@ -2036,12 +2039,11 @@ private fun CatatPemakaianPeripheralDialog(
     val availableQty = (item.jumlah - item.usedCount).coerceAtLeast(0)
 
     val ruangOptions = remember(masterRuang) {
-        val list = (masterRuang + listOf("Luar LabKom")).map { it.trim() }.distinct().filter { it.isNotBlank() }
-        if (list.isNotEmpty()) list else listOf("Lab Komputer 1", "Lab Komputer 2", "Lab Server / NOC", "Ruang TU", "Luar LabKom")
+        masterRuang.map { it.trim() }.distinct().filter { it.isNotBlank() }
     }
 
     var selectedRuang by remember(ruangOptions) {
-        mutableStateOf(ruangOptions.firstOrNull() ?: "Lab Komputer 1")
+        mutableStateOf(ruangOptions.firstOrNull() ?: "")
     }
     var ruangDropdownExpanded by remember { mutableStateOf(false) }
 

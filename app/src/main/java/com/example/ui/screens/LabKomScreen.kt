@@ -68,7 +68,7 @@ data class PcUnitData(
     val storage: String = "SSD NVMe",
     val kapasitasStorage: String = "",
     val layarInch: String = "",
-    val labRoom: String = "Lab Komputer 1",
+    val labRoom: String = "",
     val status: String = "Baik / Normal",
     val sumberDana: String = "",
     val qty: Int = 1,
@@ -127,7 +127,7 @@ fun ItemWithStock.toPcUnitData(): PcUnitData {
         storage = stgT.ifBlank { "SSD NVMe" },
         kapasitasStorage = stgC,
         layarInch = layar,
-        labRoom = ruang.ifBlank { "Lab Komputer 1" },
+        labRoom = ruang,
         status = kondisi.ifBlank { "Normal / Baik" },
         sumberDana = sumberDana ?: "",
         qty = if (stokAwal > 0) stokAwal else 1,
@@ -150,9 +150,13 @@ fun LabKomScreen(
     val canLabKomView = userRole.contains("admin", ignoreCase = true) || viewModel.isStudentPermissionGranted("labkom_view")
     val canLabKomManage = userRole.contains("admin", ignoreCase = true) || viewModel.isStudentPermissionGranted("labkom_manage")
 
+    LaunchedEffect(Unit) {
+        viewModel.forceRefreshState()
+    }
+
     // Collect Master Data for filtering and options
     val ruangList by viewModel.ruang.collectAsState()
-    val ruangOptions = if (ruangList.isNotEmpty()) ruangList else listOf("Lab Komputer 1", "Lab Komputer 2", "Lab Server / NOC")
+    val ruangOptions = ruangList
 
     var showFilterMenu by remember { mutableStateOf(false) }
     var selectedFilter by remember { mutableStateOf("Semua Filter") }
@@ -194,8 +198,24 @@ fun LabKomScreen(
                     val importedUnits = mutableListOf<PcUnitData>()
                     
                     if (rows.isNotEmpty()) {
-                        val dataRows = if (rows.firstOrNull()?.getOrNull(0)?.contains("Jenis", ignoreCase = true) == true ||
-                                          rows.firstOrNull()?.getOrNull(0)?.contains("Perangkat", ignoreCase = true) == true) {
+                        val dataRows = if (rows.size >= 3) {
+                            val firstCellRow1 = rows.getOrNull(0)?.firstOrNull()?.trim() ?: ""
+                            val firstCellRow3 = rows.getOrNull(2)?.firstOrNull()?.trim() ?: ""
+                            if (firstCellRow1.contains("Template", ignoreCase = true) ||
+                                firstCellRow1.contains("Impor", ignoreCase = true) ||
+                                firstCellRow1.contains("Laboratorium", ignoreCase = true) ||
+                                firstCellRow3.contains("Jenis", ignoreCase = true) ||
+                                firstCellRow3.contains("Perangkat", ignoreCase = true)) {
+                                // Row 1: Title, Row 2: Blank, Row 3: Header -> Start reading data from Row 4 (index 3)
+                                rows.drop(3)
+                            } else if (firstCellRow1.contains("Jenis", ignoreCase = true) ||
+                                       firstCellRow1.contains("Perangkat", ignoreCase = true)) {
+                                rows.drop(1)
+                            } else {
+                                rows
+                            }
+                        } else if (rows.firstOrNull()?.getOrNull(0)?.contains("Jenis", ignoreCase = true) == true ||
+                                   rows.firstOrNull()?.getOrNull(0)?.contains("Perangkat", ignoreCase = true) == true) {
                             rows.drop(1)
                         } else {
                             rows
@@ -203,6 +223,16 @@ fun LabKomScreen(
                         
                         for (cols in dataRows) {
                             if (cols.size >= 3 && cols.any { it.isNotBlank() }) {
+                                val firstCell = cols.getOrElse(0) { "" }.trim()
+                                if (firstCell.contains("Template Impor", ignoreCase = true) ||
+                                    firstCell.contains("Template Data", ignoreCase = true) ||
+                                    firstCell.equals("Jenis Perangkat", ignoreCase = true) ||
+                                    firstCell.equals("Jenis_Perangkat", ignoreCase = true) ||
+                                    firstCell.equals("Jenis", ignoreCase = true) ||
+                                    firstCell.equals("SN", ignoreCase = true)) {
+                                    continue
+                                }
+
                                 val newUnit = PcUnitData(
                                     jenisPerangkat = cols.getOrElse(0) { "PC Desktop" }.ifBlank { "PC Desktop" },
                                     serialNumber = cols.getOrElse(1) { "" },
@@ -215,8 +245,8 @@ fun LabKomScreen(
                                     kapasitasStorage = cols.getOrElse(8) { "256 GB" }.ifBlank { "256 GB" },
                                     processor = cols.getOrElse(9) { "" },
                                     layarInch = cols.getOrElse(10) { "24 Inch" }.ifBlank { "24 Inch" },
-                                    labRoom = cols.getOrElse(11) { "Lab Komputer 1" }.ifBlank { "Lab Komputer 1" },
-                                    status = cols.getOrElse(12) { "Baik / Normal" }.ifBlank { "Baik / Normal" },
+                                    labRoom = cols.getOrElse(11) { "" },
+                                    status = cols.getOrElse(12) { "Normal / Baik" }.ifBlank { "Normal / Baik" },
                                     sumberDana = cols.getOrElse(13) { "BOS" },
                                     qty = cols.getOrElse(14) { "1" }.toIntOrNull() ?: 1,
                                     satuan = cols.getOrElse(15) { "Unit" }.ifBlank { "Unit" },
@@ -875,7 +905,9 @@ fun LabKomScreen(
                     }
 
                     LazyColumn(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
@@ -1413,7 +1445,7 @@ fun AddEditPcUnitDialog(
     val tipeRamOptions = if (tipeRamList.isNotEmpty()) tipeRamList else listOf("DDR4", "DDR5", "DDR3", "LPDDR4", "LPDDR5")
     val kapasitasRamOptions = if (kapasitasRamList.isNotEmpty()) kapasitasRamList else listOf("4 GB", "8 GB", "16 GB", "32 GB", "64 GB")
     val storageOptions = if (storageList.isNotEmpty()) storageList else listOf("SSD NVMe", "SSD SATA", "HDD 3.5\"", "SSHD", "Dual Storage (SSD+HDD)")
-    val ruangOptions = if (ruangList.isNotEmpty()) ruangList else listOf("Lab Komputer 1", "Lab Komputer 2", "Lab Server / NOC", "Lab Multimedia")
+    val ruangOptions = ruangList
     val kondisiOptions = if (kondisiList.isNotEmpty()) kondisiList else listOf("Normal / Baik", "Expired / Afkir", "Rusak", "Pemeliharaan", "Rusak Fisik")
     val sumberDanaOptions = if (sumberDanaList.isNotEmpty()) sumberDanaList else listOf("BOS", "BOPD", "Komite", "Hibah", "APBD")
     val satuanOptions = if (unitsList.isNotEmpty()) unitsList.map { it.name } else listOf("Unit", "Set", "Pcs", "Buah")
@@ -1435,7 +1467,7 @@ fun AddEditPcUnitDialog(
     var processor by remember(initialUnit) { mutableStateOf(initialUnit?.processor ?: "") }
     var layarInch by remember(initialUnit) { mutableStateOf(initialUnit?.layarInch ?: "") }
 
-    var labRoom by remember(initialUnit) { mutableStateOf(initialUnit?.labRoom ?: (ruangOptions.firstOrNull() ?: "Lab Komputer 1")) }
+    var labRoom by remember(initialUnit) { mutableStateOf(initialUnit?.labRoom ?: (ruangOptions.firstOrNull() ?: "")) }
     var kondisi by remember(initialUnit) { mutableStateOf(initialUnit?.status ?: (kondisiOptions.firstOrNull() ?: "Normal / Baik")) }
     var sumberDana by remember(initialUnit) { mutableStateOf(initialUnit?.sumberDana ?: "") } // Default empty
     var qty by remember(initialUnit) { mutableStateOf(initialUnit?.qty?.toString() ?: "1") }

@@ -61,6 +61,10 @@ fun MasterDataScreen(
 ) {
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        viewModel.forceRefreshState()
+    }
     val tabTitles = listOf("Merek Alat", "Merek Bahan", "Kategori", "Satuan", "Ruang", "Sumber Dana", "Kondisi", "Jabatan", "Tipe RAM", "Kapasitas RAM", "Storage", "Jenis PC", "Peripheral", "Guru Mapel", "Staf")
     val isDark = false
 
@@ -1103,15 +1107,36 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
 
                     if (rows.isNotEmpty()) {
                         var addedCount = 0
-                        rows.forEachIndexed { idx, cols ->
+                        val dataRows = if (rows.size >= 3) {
+                            val r1 = rows.getOrNull(0)?.firstOrNull()?.trim() ?: ""
+                            val r3 = rows.getOrNull(2)?.firstOrNull()?.trim() ?: ""
+                            if (r1.contains("Template", ignoreCase = true) ||
+                                r1.contains("Impor", ignoreCase = true) ||
+                                r3.contains("Kategori", ignoreCase = true) ||
+                                r3.contains("Nama", ignoreCase = true)) {
+                                rows.drop(3)
+                            } else if (r1.contains("Kategori", ignoreCase = true) || r1.contains("Nama", ignoreCase = true)) {
+                                rows.drop(1)
+                            } else {
+                                rows
+                            }
+                        } else if (rows.firstOrNull()?.firstOrNull()?.trim()?.let {
+                            it.contains("Kategori", ignoreCase = true) || it.contains("Nama", ignoreCase = true) || it.contains("Template", ignoreCase = true)
+                        } == true) {
+                            rows.drop(1)
+                        } else {
+                            rows
+                        }
+
+                        dataRows.forEach { cols ->
                             val valStr = cols.getOrNull(0)?.trim() ?: ""
                             if (valStr.isNotBlank()) {
-                                val isHeader = idx == 0 && (
-                                    valStr.equals("nama", ignoreCase = true) ||
-                                    valStr.equals("kategori", ignoreCase = true) ||
-                                    valStr.startsWith("nama_", ignoreCase = true)
-                                )
-                                if (!isHeader && categories.none { it.name.equals(valStr, ignoreCase = true) }) {
+                                if (!valStr.contains("Template Impor", ignoreCase = true) &&
+                                    !valStr.contains("Template Data", ignoreCase = true) &&
+                                    !valStr.equals("kategori", ignoreCase = true) &&
+                                    !valStr.equals("nama", ignoreCase = true) &&
+                                    !valStr.startsWith("nama_", ignoreCase = true) &&
+                                    categories.none { it.name.trim().equals(valStr, ignoreCase = true) }) {
                                     viewModel.addCategory(valStr, {}, {})
                                     addedCount++
                                 }
@@ -1602,19 +1627,41 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
                     if (rows.isNotEmpty()) {
                         var addedCount = 0
                         val processedInCsv = mutableSetOf<String>()
-                        rows.forEachIndexed { idx, cols ->
+                        val dataRows = if (rows.size >= 3) {
+                            val r1 = rows.getOrNull(0)?.firstOrNull()?.trim() ?: ""
+                            val r3 = rows.getOrNull(2)?.firstOrNull()?.trim() ?: ""
+                            if (r1.contains("Template", ignoreCase = true) ||
+                                r1.contains("Impor", ignoreCase = true) ||
+                                r3.contains("Satuan", ignoreCase = true) ||
+                                r3.contains("Nama", ignoreCase = true)) {
+                                rows.drop(3)
+                            } else if (r1.contains("Satuan", ignoreCase = true) || r1.contains("Nama", ignoreCase = true)) {
+                                rows.drop(1)
+                            } else {
+                                rows
+                            }
+                        } else if (rows.firstOrNull()?.firstOrNull()?.trim()?.let {
+                            it.contains("Satuan", ignoreCase = true) || it.contains("Nama", ignoreCase = true) || it.contains("Template", ignoreCase = true)
+                        } == true) {
+                            rows.drop(1)
+                        } else {
+                            rows
+                        }
+
+                        dataRows.forEach { cols ->
                             val valStr = cols.getOrNull(0)?.trim() ?: ""
                             if (valStr.isNotBlank()) {
-                                val isHeader = idx == 0 && (
-                                    valStr.equals("nama", ignoreCase = true) ||
-                                    valStr.equals("satuan", ignoreCase = true) ||
-                                    valStr.startsWith("nama_", ignoreCase = true)
-                                )
-                                val norm = valStr.lowercase()
-                                if (!isHeader && !processedInCsv.contains(norm) && units.none { it.name.trim().equals(valStr, ignoreCase = true) }) {
-                                    processedInCsv.add(norm)
-                                    viewModel.addUnit(valStr, {}, {})
-                                    addedCount++
+                                if (!valStr.contains("Template Impor", ignoreCase = true) &&
+                                    !valStr.contains("Template Data", ignoreCase = true) &&
+                                    !valStr.equals("satuan", ignoreCase = true) &&
+                                    !valStr.equals("nama", ignoreCase = true) &&
+                                    !valStr.startsWith("nama_", ignoreCase = true)) {
+                                    val norm = valStr.lowercase()
+                                    if (!processedInCsv.contains(norm) && units.none { it.name.trim().equals(valStr, ignoreCase = true) }) {
+                                        processedInCsv.add(norm)
+                                        viewModel.addUnit(valStr, {}, {})
+                                        addedCount++
+                                    }
                                 }
                             }
                         }
@@ -2240,17 +2287,36 @@ fun KelolaSimpleListTab(
 
                     if (rows.isNotEmpty()) {
                         val parsedItems = mutableListOf<String>()
-                        rows.forEachIndexed { idx, cols ->
+                        val dataRows = if (rows.size >= 3) {
+                            val r1 = rows.getOrNull(0)?.firstOrNull()?.trim() ?: ""
+                            val r3 = rows.getOrNull(2)?.firstOrNull()?.trim() ?: ""
+                            if (r1.contains("Template", ignoreCase = true) ||
+                                r1.contains("Impor", ignoreCase = true) ||
+                                r3.contains("Nama", ignoreCase = true) ||
+                                r3.contains(menuName, ignoreCase = true)) {
+                                rows.drop(3)
+                            } else if (r1.contains("Nama", ignoreCase = true) || r1.contains(menuName, ignoreCase = true)) {
+                                rows.drop(1)
+                            } else {
+                                rows
+                            }
+                        } else if (rows.firstOrNull()?.firstOrNull()?.trim()?.let {
+                            it.contains("Nama", ignoreCase = true) || it.contains(menuName, ignoreCase = true) || it.contains("Template", ignoreCase = true)
+                        } == true) {
+                            rows.drop(1)
+                        } else {
+                            rows
+                        }
+
+                        dataRows.forEach { cols ->
                             val valStr = cols.getOrNull(0)?.trim() ?: ""
                             if (valStr.isNotBlank()) {
-                                // Skip header line if first row contains header keywords
-                                val isHeader = idx == 0 && (
-                                    valStr.equals("nama", ignoreCase = true) ||
-                                    valStr.equals("name", ignoreCase = true) ||
-                                    valStr.contains(menuName, ignoreCase = true) ||
-                                    valStr.startsWith("nama_", ignoreCase = true)
-                                )
-                                if (!isHeader) {
+                                if (!valStr.contains("Template Impor", ignoreCase = true) &&
+                                    !valStr.contains("Template Data", ignoreCase = true) &&
+                                    !valStr.equals("nama", ignoreCase = true) &&
+                                    !valStr.equals("name", ignoreCase = true) &&
+                                    !valStr.equals(menuName, ignoreCase = true) &&
+                                    !valStr.startsWith("nama_", ignoreCase = true)) {
                                     parsedItems.add(valStr)
                                 }
                             }
@@ -2753,17 +2819,41 @@ fun KelolaGuruMapelTab(
                     val rows = readExcelOrCsvInputStream(inputStream)
                     
                     if (rows.isNotEmpty()) {
-                        val hasHeader = rows.firstOrNull()?.any { 
-                            it.contains("nama", ignoreCase = true) || it.contains("nip", ignoreCase = true) || it.contains("guru", ignoreCase = true) || it.contains("mapel", ignoreCase = true)
-                        } ?: false
-                        val rowsToPreview = if (hasHeader && rows.size > 1) rows.drop(1) else rows
+                        val rowsToPreview = if (rows.size >= 3) {
+                            val r1 = rows.getOrNull(0)?.firstOrNull()?.trim() ?: ""
+                            val r3 = rows.getOrNull(2)?.firstOrNull()?.trim() ?: ""
+                            if (r1.contains("Template", ignoreCase = true) ||
+                                r1.contains("Impor", ignoreCase = true) ||
+                                r3.contains("Nama", ignoreCase = true) ||
+                                r3.contains("NIP", ignoreCase = true) ||
+                                r3.contains("Guru", ignoreCase = true) ||
+                                r3.contains("Mapel", ignoreCase = true)) {
+                                rows.drop(3)
+                            } else if (r1.contains("Nama", ignoreCase = true) || r1.contains("NIP", ignoreCase = true)) {
+                                rows.drop(1)
+                            } else {
+                                rows
+                            }
+                        } else if (rows.firstOrNull()?.firstOrNull()?.trim()?.let {
+                            it.contains("Nama", ignoreCase = true) || it.contains("NIP", ignoreCase = true) || it.contains("Template", ignoreCase = true)
+                        } == true) {
+                            rows.drop(1)
+                        } else {
+                            rows
+                        }
                         
                         val parsed = rowsToPreview.map { cols ->
-                            val nama = cols.getOrNull(0) ?: ""
-                            val nip = cols.getOrNull(1) ?: ""
-                            val mapel = cols.getOrNull(2) ?: ""
+                            val nama = cols.getOrNull(0)?.trim() ?: ""
+                            val nip = cols.getOrNull(1)?.trim() ?: ""
+                            val mapel = cols.getOrNull(2)?.trim() ?: ""
                             Triple(nama, nip, mapel)
-                        }.filter { it.first.isNotBlank() }
+                        }.filter { 
+                            it.first.isNotBlank() &&
+                            !it.first.contains("Template Impor", ignoreCase = true) &&
+                            !it.first.contains("Template Data", ignoreCase = true) &&
+                            !it.first.equals("Nama Guru", ignoreCase = true) &&
+                            !it.first.equals("Nama", ignoreCase = true)
+                        }
                         
                         if (parsed.isNotEmpty()) {
                             csvPreviewGuru = parsed
@@ -3391,17 +3481,41 @@ fun KelolaStafTab(
                     val rows = readExcelOrCsvInputStream(inputStream)
                     
                     if (rows.isNotEmpty()) {
-                        val hasHeader = rows.firstOrNull()?.any { 
-                            it.contains("nama", ignoreCase = true) || it.contains("nip", ignoreCase = true) || it.contains("staf", ignoreCase = true) || it.contains("jabatan", ignoreCase = true)
-                        } ?: false
-                        val rowsToPreview = if (hasHeader && rows.size > 1) rows.drop(1) else rows
+                        val rowsToPreview = if (rows.size >= 3) {
+                            val r1 = rows.getOrNull(0)?.firstOrNull()?.trim() ?: ""
+                            val r3 = rows.getOrNull(2)?.firstOrNull()?.trim() ?: ""
+                            if (r1.contains("Template", ignoreCase = true) ||
+                                r1.contains("Impor", ignoreCase = true) ||
+                                r3.contains("Nama", ignoreCase = true) ||
+                                r3.contains("NIP", ignoreCase = true) ||
+                                r3.contains("Staf", ignoreCase = true) ||
+                                r3.contains("Jabatan", ignoreCase = true)) {
+                                rows.drop(3)
+                            } else if (r1.contains("Nama", ignoreCase = true) || r1.contains("NIP", ignoreCase = true)) {
+                                rows.drop(1)
+                            } else {
+                                rows
+                            }
+                        } else if (rows.firstOrNull()?.firstOrNull()?.trim()?.let {
+                            it.contains("Nama", ignoreCase = true) || it.contains("NIP", ignoreCase = true) || it.contains("Template", ignoreCase = true)
+                        } == true) {
+                            rows.drop(1)
+                        } else {
+                            rows
+                        }
                         
                         val parsed = rowsToPreview.map { cols ->
-                            val nama = cols.getOrNull(0) ?: ""
-                            val nip = cols.getOrNull(1) ?: ""
-                            val jabatan = cols.getOrNull(2) ?: ""
+                            val nama = cols.getOrNull(0)?.trim() ?: ""
+                            val nip = cols.getOrNull(1)?.trim() ?: ""
+                            val jabatan = cols.getOrNull(2)?.trim() ?: ""
                             Triple(nama, nip, jabatan)
-                        }.filter { it.first.isNotBlank() }
+                        }.filter { 
+                            it.first.isNotBlank() &&
+                            !it.first.contains("Template Impor", ignoreCase = true) &&
+                            !it.first.contains("Template Data", ignoreCase = true) &&
+                            !it.first.equals("Nama Staf", ignoreCase = true) &&
+                            !it.first.equals("Nama", ignoreCase = true)
+                        }
                         
                         if (parsed.isNotEmpty()) {
                             csvPreviewStaf = parsed

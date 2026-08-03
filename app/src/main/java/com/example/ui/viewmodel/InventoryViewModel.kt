@@ -72,6 +72,55 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         initInventoryRealtimeListeners()
         seedDefaultUsers()
         cleanupDuplicateUnits()
+        cleanupDemoAndEmptyData()
+    }
+
+    private fun cleanupDemoAndEmptyData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val dao = db.inventoryDao()
+                dao.deleteDemoCategories()
+                dao.deleteDemoUnits()
+                dao.deleteDemoItems()
+                dao.deleteDemoTransactions()
+                dao.deleteDemoLoanItems()
+                dao.deleteDemoDamagedItems()
+                dao.deleteDemoPemakaianBahan()
+                dao.deleteDemoBahanAfkir()
+                dao.deleteDemoPeripherals()
+                dao.deleteDemoPeripheralStocks()
+                dao.deleteDemoPeripheralRusak()
+                dao.deleteDemoMutasiPerangkat()
+
+                dao.deleteEmptyCategories()
+                dao.deleteEmptyUnits()
+                dao.deleteEmptyItems()
+                dao.deleteEmptyPeripheralStocks()
+
+                val demoMerekAlat = listOf("ASUS", "Epson", "Canon", "Hikvision", "Polytron", "Logitech", "Makita", "Bosch", "Dekko", "Philips", "Lenovo", "HP", "Samsung", "Panasonic", "Sony", "BenQ", "Hitachi", "Acer", "SanDisk", "Toshiba", "Seagate", "WD", "MSI")
+                val demoMerekBahan = listOf("PaperOne", "Joyko", "Kenko", "Sinar Dunia", "Faber-Castell", "Aica Aibon", "3M", "Alteco", "Kenmaster", "Kangaroo", "Standard", "Pilot", "Snowman", "Chappy", "Greebel")
+                val demoRuang = listOf("Lab Komputer 1", "Lab Komputer 2", "Lab IPA Fisika", "Lab IPA Biologi", "Lab IPA Kimia", "Perpustakaan", "Ruang Guru", "Ruang Kepala Sekolah", "Ruang TU", "Aula Utama", "Gudang Sarpras", "Bengkel Elektronik", "Ruang Kelas X-A", "Ruang Kelas XI-B", "Ruang Kelas XII-C", "Lab Komputer", "Gudang Utama", "Kelas X-A", "Kelas XI-B")
+                val demoSumberDana = listOf("BOS Reguler", "BOS Kinerja", "BOP Provinsi", "Bantuan Komite Sekolah", "Bantuan Pemda", "Bantuan Kementerian", "Hibah Alumni 2020", "Sponsorship Industri", "Dana Kas Sekolah", "Bantuan CSR Bank BJB", "Anggaran Yayasan", "Hibah Kedutaan Jepang", "Donasi Orang Tua", "Subsidi Pemerintah Pusat", "Dana Swadaya", "BOS", "Dana Komite", "Bantuan Pemerintah", "BOP")
+
+                val cleanMerekAlat = settingsRepository.getMerekAlat().filterNot { demoMerekAlat.contains(it) }.sorted()
+                settingsRepository.saveMerekAlat(cleanMerekAlat)
+                _merekAlat.value = cleanMerekAlat
+
+                val cleanMerekBahan = settingsRepository.getMerekBahan().filterNot { demoMerekBahan.contains(it) }.sorted()
+                settingsRepository.saveMerekBahan(cleanMerekBahan)
+                _merekBahan.value = cleanMerekBahan
+
+                val cleanRuang = settingsRepository.getRuang().filterNot { demoRuang.contains(it) }.sorted()
+                settingsRepository.saveRuang(cleanRuang)
+                _ruang.value = cleanRuang
+
+                val cleanSumberDana = settingsRepository.getSumberDana().filterNot { demoSumberDana.contains(it) }.sorted()
+                settingsRepository.saveSumberDana(cleanSumberDana)
+                _sumberDana.value = cleanSumberDana
+            } catch (e: Exception) {
+                Log.e("InventoryVM", "Error cleaning demo and empty data", e)
+            }
+        }
     }
 
     private fun seedDefaultUsers() {
@@ -1670,6 +1719,49 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _peripheral = MutableStateFlow(settingsRepository.getPeripheral())
     val peripheral = _peripheral.asStateFlow()
+
+    fun forceRefreshState() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val dao = db.inventoryDao()
+                dao.deleteDemoCategories()
+                dao.deleteDemoUnits()
+                dao.deleteDemoItems()
+                dao.deleteDemoTransactions()
+                dao.deleteDemoLoanItems()
+                dao.deleteDemoDamagedItems()
+                dao.deleteDemoPemakaianBahan()
+                dao.deleteDemoBahanAfkir()
+                dao.deleteDemoPeripherals()
+                dao.deleteDemoPeripheralStocks()
+                dao.deleteDemoPeripheralRusak()
+                dao.deleteDemoMutasiPerangkat()
+
+                dao.deleteEmptyCategories()
+                dao.deleteEmptyUnits()
+                dao.deleteEmptyItems()
+                dao.deleteEmptyPeripheralStocks()
+
+                _merekAlat.value = settingsRepository.getMerekAlat()
+                _merekBahan.value = settingsRepository.getMerekBahan()
+                _ruang.value = settingsRepository.getRuang()
+                _sumberDana.value = settingsRepository.getSumberDana()
+                _kondisi.value = settingsRepository.getKondisi()
+                _guruMapel.value = settingsRepository.getGuruMapel()
+                _staf.value = settingsRepository.getStaf()
+                _jabatanList.value = settingsRepository.getJabatan()
+                _tipeRam.value = settingsRepository.getTipeRam()
+                _kapasitasRam.value = settingsRepository.getKapasitasRam()
+                _storage.value = settingsRepository.getStorage()
+                _jenisPc.value = settingsRepository.getJenisPc()
+                _peripheral.value = settingsRepository.getPeripheral()
+
+                getAllBahan()
+            } catch (e: Exception) {
+                Log.e("InventoryVM", "Error force refreshing state", e)
+            }
+        }
+    }
 
     fun updateMerekAlat(list: List<String>) {
         val sorted = list.sorted()
@@ -3356,17 +3448,48 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 var updated = 0
                 val existingStocks = allPeripheralStocks.value.toMutableList()
 
-                val headerRow = csvLines.firstOrNull()
-                val headerFirst = headerRow?.firstOrNull()?.trim()?.lowercase() ?: ""
-                val startIndex = if (headerFirst.contains("id_barang") || headerFirst.contains("jenis_peripheral") || headerFirst.contains("nama_item") || headerFirst.contains("nama_barang") || headerFirst.contains("id") || headerFirst.contains("kategori")) 1 else 0
+                // Check for Template Title (Row 1), Blank (Row 2), Header (Row 3) -> Data starts at Row 4 (index 3)
+                val dataRows = if (csvLines.size >= 3) {
+                    val r1 = csvLines.getOrNull(0)?.firstOrNull()?.trim() ?: ""
+                    val r3 = csvLines.getOrNull(2)?.firstOrNull()?.trim() ?: ""
+                    if (r1.contains("Template", ignoreCase = true) ||
+                        r1.contains("Impor", ignoreCase = true) ||
+                        r1.contains("Peripheral", ignoreCase = true) ||
+                        r3.contains("ID", ignoreCase = true) ||
+                        r3.contains("Jenis", ignoreCase = true) ||
+                        r3.contains("Nama", ignoreCase = true) ||
+                        r3.contains("Merek", ignoreCase = true)) {
+                        csvLines.drop(3)
+                    } else if (r1.contains("ID", ignoreCase = true) ||
+                               r1.contains("Jenis", ignoreCase = true) ||
+                               r1.contains("Nama", ignoreCase = true)) {
+                        csvLines.drop(1)
+                    } else {
+                        csvLines
+                    }
+                } else if (csvLines.firstOrNull()?.firstOrNull()?.trim()?.let {
+                    it.contains("ID", ignoreCase = true) || it.contains("Jenis", ignoreCase = true) || it.contains("Template", ignoreCase = true)
+                } == true) {
+                    csvLines.drop(1)
+                } else {
+                    csvLines
+                }
 
-                for (i in startIndex until csvLines.size) {
-                    val row = csvLines[i]
+                for (row in dataRows) {
                     if (row.isEmpty() || row.all { it.isBlank() }) continue
 
                     val rawId = row.getOrNull(0)?.trim() ?: ""
                     val jenisPeripheralRaw = row.getOrNull(1)?.trim() ?: ""
                     val namaItemRaw = row.getOrNull(2)?.trim() ?: ""
+
+                    if (rawId.contains("Template Impor", ignoreCase = true) ||
+                        rawId.contains("Template Data", ignoreCase = true) ||
+                        rawId.equals("ID Barang", ignoreCase = true) ||
+                        rawId.equals("ID_Barang", ignoreCase = true) ||
+                        jenisPeripheralRaw.equals("Jenis Peripheral", ignoreCase = true) ||
+                        namaItemRaw.equals("Nama Item", ignoreCase = true)) {
+                        continue
+                    }
 
                     val (idBarang, jenisPeripheral, namaItem) = if (rawId.startsWith("PRPH-", ignoreCase = true)) {
                         Triple(rawId, if (jenisPeripheralRaw.isNotBlank()) jenisPeripheralRaw else "Peripheral Lainnya", namaItemRaw)
@@ -4618,15 +4741,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     return@launch
                 }
 
-                // Validation of target menu (Alat vs Bahan) using the header row
-                val headerRow = csvLines.firstOrNull()
-                val firstHeaderCell = headerRow?.firstOrNull()?.trim()?.lowercase() ?: ""
-                
-                if (defaultType == "ALAT" && (firstHeaderCell == "nama_bahan" || firstHeaderCell.contains("bahan"))) {
+                // Validation of target menu (Alat vs Bahan) by checking title or header row
+                val allFirstCells = csvLines.take(3).map { it.firstOrNull()?.trim()?.lowercase() ?: "" }
+                if (defaultType == "ALAT" && allFirstCells.any { it == "nama_bahan" || (it.contains("bahan") && !it.contains("lunaris")) }) {
                     onError("Format file tidak sesuai dengan menu tujuan (File CSV Bahan diunggah ke menu Alat).")
                     return@launch
                 }
-                if (defaultType == "BAHAN" && (firstHeaderCell == "nama_alat" || firstHeaderCell.contains("alat"))) {
+                if (defaultType == "BAHAN" && allFirstCells.any { it == "nama_alat" || (it.contains("alat") && !it.contains("lunaris")) }) {
                     onError("Format file tidak sesuai dengan menu tujuan (File CSV Alat diunggah ke menu Bahan).")
                     return@launch
                 }
@@ -4646,13 +4767,43 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
                 
-                csvLines.forEach { row ->
+                // Determine data rows: Drop Row 1 (Title), Row 2 (Blank), Row 3 (Header) if template structure is present
+                val dataRows = if (csvLines.size >= 3) {
+                    val r1 = csvLines.getOrNull(0)?.firstOrNull()?.trim() ?: ""
+                    val r3 = csvLines.getOrNull(2)?.firstOrNull()?.trim() ?: ""
+                    if (r1.contains("Template", ignoreCase = true) ||
+                        r1.contains("Impor", ignoreCase = true) ||
+                        r1.contains("Lunaris", ignoreCase = true) ||
+                        r3.contains("Nama", ignoreCase = true) ||
+                        r3.contains("Kategori", ignoreCase = true) ||
+                        r3.contains("Merek", ignoreCase = true)) {
+                        csvLines.drop(3)
+                    } else if (r1.contains("Nama", ignoreCase = true) ||
+                               r1.contains("Kategori", ignoreCase = true) ||
+                               r1.contains("Merek", ignoreCase = true)) {
+                        csvLines.drop(1)
+                    } else {
+                        csvLines
+                    }
+                } else if (csvLines.firstOrNull()?.firstOrNull()?.trim()?.let {
+                    it.contains("Nama", ignoreCase = true) || it.contains("Template", ignoreCase = true)
+                } == true) {
+                    csvLines.drop(1)
+                } else {
+                    csvLines
+                }
+
+                dataRows.forEach { row ->
                     if (row.isEmpty()) return@forEach
                     val namaBarang = row.getOrNull(0)?.trim() ?: ""
                     if (namaBarang.isBlank()) return@forEach
                     
-                    if (namaBarang.equals("nama_alat", ignoreCase = true) || 
+                    if (namaBarang.contains("Template Impor", ignoreCase = true) ||
+                        namaBarang.contains("Template Data", ignoreCase = true) ||
+                        namaBarang.equals("nama_alat", ignoreCase = true) || 
                         namaBarang.equals("nama_bahan", ignoreCase = true) || 
+                        namaBarang.equals("Nama Alat", ignoreCase = true) || 
+                        namaBarang.equals("Nama Bahan", ignoreCase = true) || 
                         namaBarang.equals("Nama Barang", ignoreCase = true) || 
                         namaBarang.equals("Nama_Barang", ignoreCase = true) ||
                         namaBarang.equals("Nama", ignoreCase = true) ||

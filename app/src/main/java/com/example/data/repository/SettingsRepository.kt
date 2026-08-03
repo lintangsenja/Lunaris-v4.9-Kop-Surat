@@ -19,23 +19,12 @@ class SettingsRepository(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("gudang_settings", Context.MODE_PRIVATE)
 
     init {
-        val defaultBrands = listOf(
-            "BenQ", "Hitachi", "Epson", "Asus", "Acer", "Lenovo", "HP", "Samsung", "SanDisk", "Toshiba", "Seagate", "WD", "MSI"
-        )
         val currentMerekAlat = prefs.getString("merek_alat", null)
-        if (currentMerekAlat == null || currentMerekAlat.isBlank() || currentMerekAlat == "Sony|#|Logitech|#|Canon|#|Epson|#|HP") {
-            saveList("merek_alat", defaultBrands)
-        } else {
-            val existing = currentMerekAlat.split("|#|").map { sanitizeItem(it) }.filter { it.isNotBlank() }.toMutableList()
-            var modified = false
-            for (brand in defaultBrands) {
-                if (existing.none { it.equals(brand, ignoreCase = true) }) {
-                    existing.add(brand)
-                    modified = true
-                }
-            }
-            if (modified) {
-                saveList("merek_alat", existing)
+        val sampleBrands = listOf("BenQ", "Hitachi", "Epson", "Asus", "Acer", "Lenovo", "HP", "Samsung", "SanDisk", "Toshiba", "Seagate", "WD", "MSI", "Sony", "Logitech", "Canon", "Hikvision", "Polytron", "Makita", "Bosch", "Dekko", "Philips", "Panasonic")
+        if (currentMerekAlat != null) {
+            val existing = currentMerekAlat.split("|#|").map { sanitizeItem(it) }.filter { it.isNotBlank() }
+            if (existing.all { sampleBrands.contains(it) } || currentMerekAlat == "Sony|#|Logitech|#|Canon|#|Epson|#|HP") {
+                prefs.edit().remove("merek_alat").apply()
             }
         }
         val currentMerekBahan = prefs.getString("merek_bahan", null)
@@ -178,10 +167,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     fun getMerekAlat(): List<String> {
-        val defaults = listOf(
-            "BenQ", "Hitachi", "Epson", "Asus", "Acer", "Lenovo", "HP", "Samsung", "SanDisk", "Toshiba", "Seagate", "WD", "MSI"
-        )
-        return getList("merek_alat", defaults).sorted()
+        return getList("merek_alat", emptyList()).sorted()
     }
 
     fun saveMerekAlat(list: List<String>) {

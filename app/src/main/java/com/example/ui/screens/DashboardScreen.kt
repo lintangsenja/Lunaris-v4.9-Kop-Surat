@@ -172,6 +172,10 @@ fun DashboardScreen(
     val userRole by viewModel.userRole.collectAsState()
     val studentPermissions by viewModel.studentPermissions.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.forceRefreshState()
+    }
+
     val instansiName by viewModel.instansiName.collectAsState()
     val instansiLogoPath by viewModel.instansiLogoPath.collectAsState()
     val namaPetugasState by viewModel.defaultOfficer.collectAsState()
