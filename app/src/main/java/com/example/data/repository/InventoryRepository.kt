@@ -30,6 +30,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import com.example.data.entity.isFakeTransaction
+
 data class TransactionDetailResult(
     val transaction: LoanTransactionEntity,
     val items: List<LoanItemEntity>,
@@ -185,7 +187,7 @@ class InventoryRepository(
                             tujuanPeminjaman = doc.getString("tujuanPeminjaman"),
                             detailTujuan = doc.getString("detailTujuan")
                         )
-                    }
+                    }.filter { !it.isFakeTransaction() }
                     trySend(list)
                 }
             }
@@ -193,7 +195,7 @@ class InventoryRepository(
     }
 
     val activeTransactions: Flow<List<LoanTransactionEntity>> = allTransactions.map { list ->
-        list.filter { it.status != "Kembali" }
+        list.filter { it.status != "Kembali" && !it.isFakeTransaction() }
     }
 
     // 3. Damaged Items Stream directly from Cloud Firestore ("damaged_items")

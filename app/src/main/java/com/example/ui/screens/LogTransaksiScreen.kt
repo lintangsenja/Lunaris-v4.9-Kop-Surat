@@ -180,6 +180,7 @@ fun LogTransaksiScreen(
     val userRole by viewModel.userRole.collectAsState()
     val studentPermissions by viewModel.studentPermissions.collectAsState()
     val defaultOfficerState by viewModel.defaultOfficer.collectAsState()
+    val systemLogs by viewModel.systemLogs.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
     fun isTabAllowed(index: Int): Boolean {

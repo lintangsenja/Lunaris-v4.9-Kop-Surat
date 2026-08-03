@@ -62,6 +62,28 @@ class SettingsRepository(private val context: Context) {
                 saveList("kondisi", existing)
             }
         }
+
+        val currentStorage = prefs.getString("storage", null)
+        if (currentStorage != null) {
+            val updatedStorage = currentStorage
+                .replace("SSD NVMe M.2", "SSD NVMe")
+                .replace("SSD SATA 2.5", "SSD SATA")
+            if (updatedStorage != currentStorage) {
+                prefs.edit().putString("storage", updatedStorage).apply()
+            }
+        }
+
+        val currentJenisPc = prefs.getString("jenis_pc", null)
+        if (currentJenisPc != null) {
+            val updatedJenisPc = currentJenisPc
+                .replace("AIO (All-in-One)", "AIO")
+                .replace("AIO All in One", "AIO")
+                .replace("PC All-in-One", "AIO")
+                .replace("PC Desktop", "PC")
+            if (updatedJenisPc != currentJenisPc) {
+                prefs.edit().putString("jenis_pc", updatedJenisPc).apply()
+            }
+        }
     }
 
     companion object {
@@ -249,9 +271,20 @@ class SettingsRepository(private val context: Context) {
     fun getStorage(): List<String> {
         val defaults = listOf(
             "Extr Flashdisk", "Extr HDD", "Extr MicroSD", "Extr SSD",
-            "HDD 2.5", "HDD 3.5", "SSD NVMe M.2", "SSD SATA 2.5"
+            "HDD 2.5", "HDD 3.5", "SSD NVMe", "SSD SATA"
         )
-        return getList("storage", defaults)
+        val rawList = getList("storage", defaults)
+        val migrated = rawList.map { item ->
+            when (item) {
+                "SSD NVMe M.2" -> "SSD NVMe"
+                "SSD SATA 2.5" -> "SSD SATA"
+                else -> item
+            }
+        }.distinct()
+        if (migrated != rawList) {
+            saveStorage(migrated)
+        }
+        return migrated
     }
 
     fun saveStorage(list: List<String>) {
@@ -260,9 +293,20 @@ class SettingsRepository(private val context: Context) {
 
     fun getJenisPc(): List<String> {
         val defaults = listOf(
-            "AIO (All-in-One)", "PC Desktop", "Server", "Mini-PC"
+            "AIO", "PC", "Server", "Mini-PC"
         )
-        return getList("jenis_pc", defaults)
+        val rawList = getList("jenis_pc", defaults)
+        val migrated = rawList.map { item ->
+            when (item) {
+                "AIO (All-in-One)", "AIO All in One", "PC All-in-One", "All-in-One" -> "AIO"
+                "PC Desktop" -> "PC"
+                else -> item
+            }
+        }.distinct()
+        if (migrated != rawList) {
+            saveJenisPc(migrated)
+        }
+        return migrated
     }
 
     fun saveJenisPc(list: List<String>) {

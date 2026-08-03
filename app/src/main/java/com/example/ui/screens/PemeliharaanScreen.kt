@@ -126,7 +126,7 @@ fun PemeliharaanScreen(
             PcUnitData(
                 id = item.idBarang,
                 name = item.namaBarang,
-                jenisPerangkat = item.kategori.ifBlank { "PC Desktop" },
+                jenisPerangkat = item.kategori.ifBlank { "PC" },
                 serialNumber = item.serialNumber,
                 labRoom = item.ruang.ifBlank { "Lab Komputer 1" },
                 status = item.kondisi.ifBlank { "Baik / Normal" },

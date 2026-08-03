@@ -1,5 +1,6 @@
 package com.example.ui.screens
 import com.example.ui.components.LunarisCard
+import com.example.data.entity.isFakeTransaction
 import coil.compose.AsyncImage
 
 import androidx.compose.foundation.background
@@ -212,7 +213,11 @@ fun DashboardScreen(
                     val list = mutableListOf<GlobalActivity>()
                     for (doc in snapshot.documents) {
                         val id = doc.id
+                        val status = doc.getString("status") ?: "Dipinjam"
+                        val kelas = doc.getString("kelas") ?: ""
                         val namaPeminjam = doc.getString("namaPeminjam") ?: ""
+                        if (com.example.data.entity.isFakeLoanTransaction(id, status, kelas, namaPeminjam)) continue
+
                         if (isSiswaUser) {
                             if (namaPetugas.isNotBlank() && !namaPetugas.equals("Administrator", ignoreCase = true)) {
                                 if (!namaPeminjam.trim().equals(namaPetugas.trim(), ignoreCase = true)) continue
@@ -220,7 +225,6 @@ fun DashboardScreen(
                                 continue
                             }
                         }
-                        val status = doc.getString("status") ?: "Dipinjam"
                         val tanggal = doc.getString("tanggal") ?: ""
                         val waktu = doc.getString("waktu") ?: ""
                         
@@ -270,67 +274,32 @@ fun DashboardScreen(
         }
     }
 
-    val globalActivities = remember(recentFirestoreActivities, allTransactions, allPemakaianBahan) {
+    val globalActivities = remember(recentFirestoreActivities, allTransactions) {
         val list = mutableListOf<GlobalActivity>()
         
-        // 1. Add real-time loan transactions from Firestore
-        list.addAll(recentFirestoreActivities)
+        // 1. Add real-time loan transactions from Firestore (filtering out any fake audit logs)
+        list.addAll(recentFirestoreActivities.filter { !com.example.data.entity.isFakeLoanTransaction(it.id, it.type, "", it.title) })
         
-        // 2. Add other local transaction activities (not sirkulasi)
-        allTransactions.forEach { tx ->
-            val isSirkulasi = !tx.idTransaksi.startsWith("TX-INP") && 
-                              !tx.idTransaksi.startsWith("TX-AFK") && 
-                              !tx.idTransaksi.startsWith("TX-DMG") && 
-                              !tx.idTransaksi.startsWith("TX-OPN") && 
-                              !tx.idTransaksi.startsWith("TX-RUM") && 
-                              !tx.idTransaksi.startsWith("TX-SYN")
-            if (!isSirkulasi) {
-                if (tx.idTransaksi.startsWith("TX-INP")) {
-                    list.add(
-                        GlobalActivity(
-                            id = tx.idTransaksi,
-                            title = tx.namaPeminjam,
-                            subtitle = "Aset Baru Terdaftar",
-                            date = tx.tanggal,
-                            time = tx.waktu,
-                            type = "Input Baru",
-                            statusText = "Aset Baru",
-                            statusColor = Color(0xFF3B82F6)
-                        )
+        // 2. Add real circulation transactions from local database
+        allTransactions.filter { !it.isFakeTransaction() }.forEach { tx ->
+            if (list.none { it.id == tx.idTransaksi }) {
+                val isReturned = tx.status == "Kembali" || tx.status == "Dikembalikan"
+                list.add(
+                    GlobalActivity(
+                        id = tx.idTransaksi,
+                        title = tx.namaPeminjam,
+                        subtitle = "Sirkulasi Alat (${tx.idTransaksi})",
+                        date = tx.tanggal,
+                        time = tx.waktu,
+                        type = "Sirkulasi",
+                        statusText = if (isReturned) "Kembali" else "Dipinjam",
+                        statusColor = if (isReturned) Color(0xFF10B981) else Color(0xFFF59E0B)
                     )
-                } else if (tx.idTransaksi.startsWith("TX-OPN")) {
-                    list.add(
-                        GlobalActivity(
-                            id = tx.idTransaksi,
-                            title = tx.namaPeminjam,
-                            subtitle = "Stock Opname Penyesuaian",
-                            date = tx.tanggal,
-                            time = tx.waktu,
-                            type = "Manajemen",
-                            statusText = "Opname",
-                            statusColor = Color(0xFF8B5CF6)
-                        )
-                    )
-                }
+                )
             }
         }
         
-        allPemakaianBahan.forEach { pmk ->
-            list.add(
-                GlobalActivity(
-                    id = pmk.idPemakaian,
-                    title = pmk.namaPeminta,
-                    subtitle = "${pmk.namaBarang} (${pmk.jumlahDiambil} ${pmk.satuan})",
-                    date = pmk.tanggalPemakaian,
-                    time = "12:00",
-                    type = "Bahan",
-                    statusText = "Pemakaian",
-                    statusColor = Color(0xFFEC4899)
-                )
-            )
-        }
-        
-        list.sortedWith(compareByDescending<GlobalActivity> { it.date }.thenByDescending { it.time })
+        list.sortedWith(compareByDescending<GlobalActivity> { it.date }.thenByDescending { it.time }).take(10)
     }
 
     val isSyncing by viewModel.isSyncing.collectAsState()

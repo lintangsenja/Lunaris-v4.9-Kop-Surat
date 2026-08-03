@@ -168,7 +168,7 @@ fun StokOpnameScreen(
 
     val labKomCategories = remember {
         setOf(
-            "PC Desktop", "Workstation Design", "Server Lab / NOC",
+            "PC", "AIO", "PC Desktop", "Workstation Design", "Server Lab / NOC",
             "All-in-One PC", "Laptop LabKom", "Hardware Komputer",
             "Workstation", "Server", "All-in-One", "LabKom", "Komputer"
         )

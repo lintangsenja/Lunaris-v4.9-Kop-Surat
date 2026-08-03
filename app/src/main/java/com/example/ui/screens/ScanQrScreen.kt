@@ -529,7 +529,7 @@ fun ScannerTab(
                 } else {
                     scanHistory.forEach { entry ->
                         val labKomCats = setOf(
-                            "PC Desktop", "Workstation Design", "Server Lab / NOC",
+                            "PC", "AIO", "PC Desktop", "Workstation Design", "Server Lab / NOC",
                             "All-in-One PC", "Laptop LabKom", "Hardware Komputer",
                             "Workstation", "Server", "All-in-One", "LabKom"
                         )
@@ -707,7 +707,7 @@ fun ScannerTab(
         if (showResultDialog && scannedItem != null) {
             val item = scannedItem!!
             val labKomCats = setOf(
-                "PC Desktop", "Workstation Design", "Server Lab / NOC",
+                "PC", "AIO", "PC Desktop", "Workstation Design", "Server Lab / NOC",
                 "All-in-One PC", "Laptop LabKom", "Hardware Komputer",
                 "Workstation", "Server", "All-in-One", "LabKom"
             )
@@ -1366,7 +1366,7 @@ fun GeneratorTab(viewModel: InventoryViewModel) {
 
     val checkLabKom = { item: ItemWithStock ->
         val labKomCategories = setOf(
-            "PC Desktop", "Workstation Design", "Server Lab / NOC",
+            "PC", "AIO", "PC Desktop", "Workstation Design", "Server Lab / NOC",
             "All-in-One PC", "Laptop LabKom", "Hardware Komputer",
             "Workstation", "Server", "All-in-One", "LabKom"
         )
@@ -2519,6 +2519,8 @@ fun InputManualTab(viewModel: InventoryViewModel) {
 
     val labKomMasterCategories = remember {
         listOf(
+            "PC",
+            "AIO",
             "PC Desktop",
             "Workstation Design",
             "Server Lab / NOC",

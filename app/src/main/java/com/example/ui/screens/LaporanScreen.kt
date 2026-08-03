@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import com.example.data.entity.isFakeTransaction
 import com.example.data.entity.KopLaporanEntity
 import com.example.data.entity.parseKopRowOrder
 import com.example.data.entity.parseTtdSigners
@@ -7124,7 +7125,24 @@ fun LogAktivitasStokTabContent(
         val list = mutableListOf<AuditLogEntry>()
 
         transactions.forEach { tx ->
-            if (tx.status == "Kembali") {
+            if (tx.isFakeTransaction()) {
+                val isImport = tx.status.contains("Impor", ignoreCase = true) || tx.idTransaksi.startsWith("TX-IMP")
+                val isManual = tx.status.contains("Manual", ignoreCase = true) || tx.idTransaksi.startsWith("TX-INP")
+                val logType = if (isImport) "IMPOR" else if (isManual) "MANUAL" else "AUDIT"
+                val badgeCol = if (isImport) Color(0xFF0284C7) else if (isManual) Color(0xFF10B981) else Color(0xFF6366F1)
+                val badgeBg = if (isImport) Color(0xFFE0F2FE) else if (isManual) Color(0xFFD1FAE5) else Color(0xFFEEF2FF)
+                list.add(
+                    AuditLogEntry(
+                        type = logType,
+                        title = tx.namaPeminjam,
+                        subtitle = tx.keteranganKerusakan ?: "Audit Trail Sistem - ${tx.idTransaksi}",
+                        officer = tx.namaPetugas,
+                        date = "${tx.tanggal} ${tx.waktu}",
+                        badgeColor = badgeCol,
+                        badgeBg = badgeBg
+                    )
+                )
+            } else if (tx.status == "Kembali") {
                 list.add(
                     AuditLogEntry(
                         type = "KEMBALI",
@@ -7203,8 +7221,9 @@ fun LogAktivitasStokTabContent(
                 entry.subtitle.contains(searchQuery, ignoreCase = true) ||
                 entry.officer.contains(searchQuery, ignoreCase = true)
             val matchesCategory = when (selectedCategoryFilter) {
-                "Pergerakan Stok" -> entry.type == "PEMAKAIAN" || entry.type == "AFKIR"
+                "Pergerakan Stok" -> entry.type == "PEMAKAIAN" || entry.type == "AFKIR" || entry.type == "MANUAL" || entry.type == "IMPOR"
                 "Sirkulasi" -> entry.type == "PINJAM" || entry.type == "KEMBALI"
+                "Aktivitas Sistem" -> entry.type == "AUDIT" || entry.type == "MANUAL" || entry.type == "IMPOR"
                 "Afkir & Damage" -> entry.type == "AFKIR" || entry.type == "RUSAK"
                 else -> true
             }

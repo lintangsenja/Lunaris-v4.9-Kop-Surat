@@ -230,6 +230,18 @@ interface InventoryDao {
     @Query("SELECT * FROM loan_transactions WHERE idTransaksi = :idTransaksi LIMIT 1")
     suspend fun getTransactionById(idTransaksi: String): LoanTransactionEntity?
 
+    @Query("DELETE FROM loan_transactions WHERE idTransaksi = :id")
+    suspend fun deleteTransactionById(id: String)
+
+    @Query("DELETE FROM loan_items WHERE idTransaksi = :id")
+    suspend fun deleteLoanItemsByTransactionId(id: String)
+
+    @Query("DELETE FROM loan_transactions WHERE idTransaksi LIKE 'TX-INP%' OR idTransaksi LIKE 'TX-ADD%' OR idTransaksi LIKE 'TX-OPN%' OR idTransaksi LIKE 'TX-RUM%' OR idTransaksi LIKE 'TX-DEL%' OR idTransaksi LIKE 'TX-AFK%' OR idTransaksi LIKE 'TX-DMG%' OR idTransaksi LIKE 'TX-AUD%' OR idTransaksi LIKE 'TX-VAL%' OR idTransaksi LIKE 'TX-PMK%' OR idTransaksi LIKE 'TX-SYN%' OR status IN ('Aset Baru', 'Input Baru', 'Penambahan Stok', 'Tambah Stok', 'Stock Opname', 'Pindah Ruangan', 'Hapus Aset', 'Sistem / Aset', 'Audit', 'Afkir', 'Rusak', 'Servis', 'Validasi Petugas', 'Pemakaian Bahan', 'Hibah', 'Aset / Sistem') OR kelas LIKE '%Sistem / Aset%' OR kelas LIKE '%Audit%'")
+    suspend fun cleanupFakeLoanTransactions()
+
+    @Query("DELETE FROM loan_items WHERE idTransaksi LIKE 'TX-INP%' OR idTransaksi LIKE 'TX-ADD%' OR idTransaksi LIKE 'TX-OPN%' OR idTransaksi LIKE 'TX-RUM%' OR idTransaksi LIKE 'TX-DEL%' OR idTransaksi LIKE 'TX-AFK%' OR idTransaksi LIKE 'TX-DMG%' OR idTransaksi LIKE 'TX-AUD%' OR idTransaksi LIKE 'TX-VAL%' OR idTransaksi LIKE 'TX-PMK%' OR idTransaksi LIKE 'TX-SYN%'")
+    suspend fun cleanupFakeLoanItems()
+
     @Query("DELETE FROM items")
     suspend fun clearItems()
 
@@ -322,32 +334,6 @@ interface InventoryDao {
             namaPetugas = namaPetugas
         )
         updateDamagedItem(updatedRecord)
-
-        val transactionId = "TX-AUD-" + System.currentTimeMillis()
-        val auditTx = LoanTransactionEntity(
-            idTransaksi = transactionId,
-            tanggal = currentDate,
-            waktu = currentTime,
-            namaPeminjam = "Audit: ${record.namaBarang}",
-            kelas = "Ubah Status",
-            kondisi = newStatus,
-            namaPetugas = namaPetugas,
-            status = "Kembali",
-            tanggalKembali = currentDate,
-            waktuKembali = currentTime,
-            kondisiKembali = newStatus,
-            petugasKembali = namaPetugas,
-            keteranganKerusakan = "Status diubah dari '$oldStatus' ke '$newStatus'. Catatan: $alasan"
-        )
-        insertTransaction(auditTx)
-
-        val auditItem = LoanItemEntity(
-            idTransaksi = transactionId,
-            idBarang = record.idBarang,
-            namaBarang = record.namaBarang,
-            jumlah = record.jumlah
-        )
-        insertLoanItems(listOf(auditItem))
     }
 
     @Query("DELETE FROM damaged_items")
@@ -456,32 +442,6 @@ interface InventoryDao {
             if (record.status != "Dibatalkan") {
                 increaseItemStock(record.idBarang, record.jumlahAfkir)
             }
-            
-            val transactionId = "TX-AFK-DEL-" + System.currentTimeMillis()
-            val auditTx = LoanTransactionEntity(
-                idTransaksi = transactionId,
-                tanggal = currentDate,
-                waktu = currentTime,
-                namaPeminjam = "Hapus Permanen: ${record.namaBarang}",
-                kelas = "Audit Afkir",
-                kondisi = "Permanen",
-                namaPetugas = namaPetugas,
-                status = "Kembali",
-                tanggalKembali = currentDate,
-                waktuKembali = currentTime,
-                kondisiKembali = "Permanen",
-                petugasKembali = namaPetugas,
-                keteranganKerusakan = "Pencatatan afkir ${record.idAfkir} untuk ${record.namaBarang} (${record.jumlahAfkir} ${record.satuan}) dihapus secara permanen dari sistem."
-            )
-            insertTransaction(auditTx)
-
-            val auditItem = LoanItemEntity(
-                idTransaksi = transactionId,
-                idBarang = record.idBarang,
-                namaBarang = record.namaBarang,
-                jumlah = record.jumlahAfkir
-            )
-            insertLoanItems(listOf(auditItem))
         }
     }
 
@@ -497,32 +457,6 @@ interface InventoryDao {
             deleteDamagedItemById(id)
             decreaseItemStock(record.idBarang, record.jumlah)
             repairStokRusak(record.idBarang, record.jumlah)
-            
-            val transactionId = "TX-DMG-DEL-" + System.currentTimeMillis()
-            val auditTx = LoanTransactionEntity(
-                idTransaksi = transactionId,
-                tanggal = currentDate,
-                waktu = currentTime,
-                namaPeminjam = "Hapus Permanen: ${record.namaBarang}",
-                kelas = "Audit Rusak",
-                kondisi = "Dihapus",
-                namaPetugas = namaPetugas,
-                status = "Kembali",
-                tanggalKembali = currentDate,
-                waktuKembali = currentTime,
-                kondisiKembali = "Dihapus",
-                petugasKembali = namaPetugas,
-                keteranganKerusakan = "Penghapusan fisik aset permanen sebanyak ${record.jumlah} unit."
-            )
-            insertTransaction(auditTx)
-
-            val auditItem = LoanItemEntity(
-                idTransaksi = transactionId,
-                idBarang = record.idBarang,
-                namaBarang = record.namaBarang,
-                jumlah = record.jumlah
-            )
-            insertLoanItems(listOf(auditItem))
         }
     }
 
@@ -679,4 +613,17 @@ interface InventoryDao {
 
     @Query("DELETE FROM recent_kop WHERE id = :id")
     suspend fun deleteRecentKop(id: Int)
+
+    // Master Data Sync & Migration Queries
+    @Query("UPDATE items SET kategori = 'PC' WHERE kategori = 'PC Desktop'")
+    suspend fun migratePcDesktopToPc()
+
+    @Query("UPDATE items SET kategori = 'AIO' WHERE kategori IN ('AIO (All-in-One)', 'AIO All in One', 'PC All-in-One', 'All-in-One')")
+    suspend fun migrateAioCategory()
+
+    @Query("UPDATE items SET keterangan = REPLACE(keterangan, 'STG_T:SSD NVMe M.2', 'STG_T:SSD NVMe') WHERE keterangan LIKE '%STG_T:SSD NVMe M.2%'")
+    suspend fun migrateSsdNvmeKeterangan()
+
+    @Query("UPDATE items SET keterangan = REPLACE(keterangan, 'STG_T:SSD SATA 2.5', 'STG_T:SSD SATA') WHERE keterangan LIKE '%STG_T:SSD SATA 2.5%'")
+    suspend fun migrateSsdSataKeterangan()
 }

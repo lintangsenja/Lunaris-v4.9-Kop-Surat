@@ -2309,7 +2309,7 @@ fun KelolaSimpleListTab(
                         }
 
                         dataRows.forEach { cols ->
-                            val valStr = cols.getOrNull(0)?.trim() ?: ""
+                            var valStr = cols.getOrNull(0)?.trim() ?: ""
                             if (valStr.isNotBlank()) {
                                 if (!valStr.contains("Template Impor", ignoreCase = true) &&
                                     !valStr.contains("Template Data", ignoreCase = true) &&
@@ -2317,6 +2317,19 @@ fun KelolaSimpleListTab(
                                     !valStr.equals("name", ignoreCase = true) &&
                                     !valStr.equals(menuName, ignoreCase = true) &&
                                     !valStr.startsWith("nama_", ignoreCase = true)) {
+                                    if (menuName.equals("Storage", ignoreCase = true)) {
+                                        if (valStr.equals("SSD NVMe M.2", ignoreCase = true)) valStr = "SSD NVMe"
+                                        if (valStr.equals("SSD SATA 2.5", ignoreCase = true)) valStr = "SSD SATA"
+                                    } else if (menuName.equals("Jenis PC", ignoreCase = true)) {
+                                        if (valStr.equals("AIO (All-in-One)", ignoreCase = true) ||
+                                            valStr.equals("AIO All in One", ignoreCase = true) ||
+                                            valStr.equals("PC All-in-One", ignoreCase = true) ||
+                                            valStr.equals("All-in-One", ignoreCase = true)) {
+                                            valStr = "AIO"
+                                        } else if (valStr.equals("PC Desktop", ignoreCase = true)) {
+                                            valStr = "PC"
+                                        }
+                                    }
                                     parsedItems.add(valStr)
                                 }
                             }
@@ -2421,11 +2434,25 @@ fun KelolaSimpleListTab(
                     onClick = {
                         val headerName = "nama_${menuName.lowercase().replace(" ", "_")}"
                         val headers = listOf(headerName)
-                        val templateRows = listOf(
-                            listOf("Contoh $menuName 1"),
-                            listOf("Contoh $menuName 2"),
-                            listOf("Contoh $menuName 3")
-                        )
+                        val templateRows = when (menuName) {
+                            "Storage" -> listOf(
+                                listOf("SSD NVMe"),
+                                listOf("SSD SATA"),
+                                listOf("HDD 3.5"),
+                                listOf("Extr Flashdisk")
+                            )
+                            "Jenis PC" -> listOf(
+                                listOf("AIO"),
+                                listOf("PC"),
+                                listOf("Server"),
+                                listOf("Mini-PC")
+                            )
+                            else -> listOf(
+                                listOf("Contoh $menuName 1"),
+                                listOf("Contoh $menuName 2"),
+                                listOf("Contoh $menuName 3")
+                            )
+                        }
                         val bytes = generateExcelBytes(
                             title = "Template Impor Master $menuName Lunaris",
                             headers = headers,

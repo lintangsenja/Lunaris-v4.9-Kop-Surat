@@ -59,7 +59,7 @@ import kotlinx.coroutines.withContext
 data class PcUnitData(
     val id: String = "",
     val name: String = "",
-    val jenisPerangkat: String = "PC Desktop",
+    val jenisPerangkat: String = "PC",
     val serialNumber: String = "",
     val merek: String = "",
     val processor: String = "",
@@ -118,13 +118,21 @@ fun ItemWithStock.toPcUnitData(): PcUnitData {
     return PcUnitData(
         id = idBarang,
         name = namaBarang,
-        jenisPerangkat = kategori.ifBlank { "PC Desktop" },
+        jenisPerangkat = when (kategori) {
+            "PC Desktop" -> "PC"
+            "AIO (All-in-One)", "AIO All in One", "PC All-in-One", "All-in-One" -> "AIO"
+            else -> kategori.ifBlank { "PC" }
+        },
         serialNumber = serialNumber,
         merek = merekAlat,
         processor = proc,
         tipeRam = ramT.ifBlank { "DDR4" },
         kapasitasRam = ramC.ifBlank { "8 GB" },
-        storage = stgT.ifBlank { "SSD NVMe" },
+        storage = when (stgT) {
+            "SSD NVMe M.2" -> "SSD NVMe"
+            "SSD SATA 2.5" -> "SSD SATA"
+            else -> stgT.ifBlank { "SSD NVMe" }
+        },
         kapasitasStorage = stgC,
         layarInch = layar,
         labRoom = ruang,
@@ -168,7 +176,7 @@ fun LabKomScreen(
 
     val labKomCats = remember {
         setOf(
-            "PC Desktop", "Workstation Design", "Server Lab / NOC",
+            "PC", "AIO", "PC Desktop", "Workstation Design", "Server Lab / NOC",
             "All-in-One PC", "Laptop LabKom", "Hardware Komputer",
             "Workstation", "Server", "All-in-One", "LabKom", "Komputer"
         )
@@ -234,14 +242,26 @@ fun LabKomScreen(
                                 }
 
                                 val newUnit = PcUnitData(
-                                    jenisPerangkat = cols.getOrElse(0) { "PC Desktop" }.ifBlank { "PC Desktop" },
+                                    jenisPerangkat = cols.getOrElse(0) { "PC" }.let { raw ->
+                                        when (raw) {
+                                            "PC Desktop" -> "PC"
+                                            "AIO (All-in-One)", "AIO All in One", "PC All-in-One", "All-in-One" -> "AIO"
+                                            else -> raw.ifBlank { "PC" }
+                                        }
+                                    },
                                     serialNumber = cols.getOrElse(1) { "" },
                                     name = cols.getOrElse(2) { "PC Lab" }.ifBlank { "PC Lab" },
                                     id = cols.getOrElse(3) { "" }.ifBlank { "PC-LAB-${System.currentTimeMillis() % 10000}" },
                                     merek = cols.getOrElse(4) { "" },
                                     tipeRam = cols.getOrElse(5) { "DDR4" }.ifBlank { "DDR4" },
                                     kapasitasRam = cols.getOrElse(6) { "8 GB" }.ifBlank { "8 GB" },
-                                    storage = cols.getOrElse(7) { "SSD NVMe" }.ifBlank { "SSD NVMe" },
+                                    storage = cols.getOrElse(7) { "SSD NVMe" }.let { raw ->
+                                        when (raw) {
+                                            "SSD NVMe M.2" -> "SSD NVMe"
+                                            "SSD SATA 2.5" -> "SSD SATA"
+                                            else -> raw.ifBlank { "SSD NVMe" }
+                                        }
+                                    },
                                     kapasitasStorage = cols.getOrElse(8) { "256 GB" }.ifBlank { "256 GB" },
                                     processor = cols.getOrElse(9) { "" },
                                     layarInch = cols.getOrElse(10) { "24 Inch" }.ifBlank { "24 Inch" },
@@ -287,6 +307,12 @@ fun LabKomScreen(
                                     onError = {}
                                 )
                             }
+                            viewModel.logSystemActivity(
+                                activityType = "Impor Massal",
+                                subjectName = "Impor Massal PC Unit LabKom (${importedUnits.size} Unit)",
+                                details = "Berhasil mengimpor ${importedUnits.size} unit PC LabKom secara massal via file Excel/CSV.",
+                                officerName = null
+                            )
                             Toast.makeText(context, "Berhasil mengimpor ${importedUnits.size} unit PC!", Toast.LENGTH_LONG).show()
                         }
                     } else {
@@ -599,7 +625,7 @@ fun LabKomScreen(
                                 "Layar", "Ruang", "Kondisi", "Sumber Dana", "Qty", "Satuan", "Keterangan"
                             )
                             val templateRows = listOf(
-                                listOf("PC Desktop", "SN-ASUS-2026-001", "PC LabKom 01", "PC-LAB1-001", "Asus", "DDR4", "16 GB", "SSD NVMe", "512 GB", "Intel Core i5-10400F @ 2.90GHz", "24 Inch", "Lab Komputer 1", "Normal / Baik", "BOS", "1", "Unit", "Unit PC Siap Pakai Praktikum"),
+                                listOf("PC", "SN-ASUS-2026-001", "PC LabKom 01", "PC-LAB1-001", "Asus", "DDR4", "16 GB", "SSD NVMe", "512 GB", "Intel Core i5-10400F @ 2.90GHz", "24 Inch", "Lab Komputer 1", "Normal / Baik", "BOS", "1", "Unit", "Unit PC Siap Pakai Praktikum"),
                                 listOf("Workstation", "SN-DELL-2026-089", "Workstation Design 02", "PC-LAB2-002", "Dell", "DDR4", "32 GB", "SSD NVMe", "1 TB", "Intel Core i7-12700K @ 3.60GHz", "27 Inch", "Lab Komputer 2", "Pemeliharaan", "BOS Reguler", "1", "Unit", "Unit PC High End Grafis")
                             )
                             val bytes = generateExcelBytes(
@@ -761,7 +787,7 @@ fun LabKomScreen(
                             ),
                             FilterGroup(
                                 title = "Jenis Perangkat",
-                                options = listOf("Semua Jenis", "PC Desktop", "Workstation", "All-in-One", "Server", "Laptop"),
+                                options = listOf("Semua Jenis", "PC", "AIO", "Workstation", "Server", "Laptop"),
                                 selectedOption = tempJenisFilter,
                                 onOptionSelected = { tempJenisFilter = it }
                             ),
@@ -1440,7 +1466,7 @@ fun AddEditPcUnitDialog(
     val unitsList by viewModel.allUnits.collectAsState()
 
     // Fallbacks if master data is empty
-    val jenisPcOptions = if (jenisPcList.isNotEmpty()) jenisPcList else listOf("PC Desktop", "PC All-in-One", "Mini PC", "Workstation", "Laptop Lab")
+    val jenisPcOptions = if (jenisPcList.isNotEmpty()) jenisPcList else listOf("PC", "AIO", "Mini PC", "Workstation", "Laptop Lab")
     val merekOptions = if (merekList.isNotEmpty()) merekList else listOf("Asus", "Lenovo", "Dell", "HP", "Acer", "MSI", "Custom / Rakitan")
     val tipeRamOptions = if (tipeRamList.isNotEmpty()) tipeRamList else listOf("DDR4", "DDR5", "DDR3", "LPDDR4", "LPDDR5")
     val kapasitasRamOptions = if (kapasitasRamList.isNotEmpty()) kapasitasRamList else listOf("4 GB", "8 GB", "16 GB", "32 GB", "64 GB")
@@ -1451,7 +1477,7 @@ fun AddEditPcUnitDialog(
     val satuanOptions = if (unitsList.isNotEmpty()) unitsList.map { it.name } else listOf("Unit", "Set", "Pcs", "Buah")
 
     // Form States (17 Fields)
-    var jenisPerangkat by remember(initialUnit) { mutableStateOf(initialUnit?.jenisPerangkat ?: (jenisPcOptions.firstOrNull() ?: "PC Desktop")) }
+    var jenisPerangkat by remember(initialUnit) { mutableStateOf(initialUnit?.jenisPerangkat ?: (jenisPcOptions.firstOrNull() ?: "PC")) }
     var serialNumber by remember(initialUnit) { mutableStateOf(initialUnit?.serialNumber ?: "") }
     var name by remember(initialUnit) { mutableStateOf(initialUnit?.name ?: "PC-LAB-${String.format(java.util.Locale.US, "%02d", existingCount + 1)}") }
 
@@ -1982,7 +2008,7 @@ fun AddEditPcUnitDialog(
                                 val unitResult = PcUnitData(
                                     id = if (finalId.isBlank()) "PC-${System.currentTimeMillis()}" else finalId,
                                     name = name.trim(),
-                                    jenisPerangkat = jenisPerangkat.ifBlank { "PC Desktop" },
+                                    jenisPerangkat = jenisPerangkat.ifBlank { "PC" },
                                     serialNumber = serialNumber.trim(),
                                     merek = merek,
                                     processor = processor.trim(),

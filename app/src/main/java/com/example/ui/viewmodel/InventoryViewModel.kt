@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.combine
 import com.example.data.model.ReportStats
 import com.example.data.model.ReportDetailItem
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import java.text.SimpleDateFormat
@@ -44,6 +45,25 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     private val repository = InventoryRepository(db.inventoryDao(), syncService)
     val settingsRepository = SettingsRepository(application)
     private val firebaseService = com.example.data.network.FirebaseService(db)
+    val auditRepository = com.example.data.repository.AuditRepository(db.inventoryDao(), firebaseService)
+    val systemLogs: StateFlow<List<com.example.data.entity.LoanTransactionEntity>> = auditRepository.systemLogs
+
+    fun logSystemActivity(
+        activityType: String,
+        subjectName: String,
+        details: String,
+        officerName: String? = null
+    ) {
+        viewModelScope.launch {
+            val officer = if (!officerName.isNullOrBlank()) officerName else defaultOfficer.value.ifBlank { "Administrator" }
+            auditRepository.logActivity(
+                activityType = activityType,
+                subjectName = subjectName,
+                details = details,
+                officerName = officer
+            )
+        }
+    }
 
     // Users State
     val allUsers: StateFlow<List<UserEntity>> = repository.allUsers
@@ -79,6 +99,9 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val dao = db.inventoryDao()
+                dao.cleanupFakeLoanTransactions()
+                dao.cleanupFakeLoanItems()
+
                 dao.deleteDemoCategories()
                 dao.deleteDemoUnits()
                 dao.deleteDemoItems()
@@ -96,6 +119,33 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 dao.deleteEmptyUnits()
                 dao.deleteEmptyItems()
                 dao.deleteEmptyPeripheralStocks()
+
+                dao.migratePcDesktopToPc()
+                dao.migrateAioCategory()
+                dao.migrateSsdNvmeKeterangan()
+                dao.migrateSsdSataKeterangan()
+
+                val firestore = com.example.data.network.FirebaseManager.getFirestore()
+                if (firestore != null) {
+                    try {
+                        val txSnap = firestore.collection("transactions").get().await()
+                        for (doc in txSnap.documents) {
+                            val id = doc.id
+                            val status = doc.getString("status") ?: ""
+                            val kelas = doc.getString("kelas") ?: ""
+                            val peminjam = doc.getString("namaPeminjam") ?: ""
+                            if (com.example.data.entity.isFakeLoanTransaction(id, status, kelas, peminjam)) {
+                                firestore.collection("transactions").document(id).delete()
+                                val itemsSnap = firestore.collection("loan_items").whereEqualTo("idTransaksi", id).get().await()
+                                for (itemDoc in itemsSnap.documents) {
+                                    firestore.collection("loan_items").document(itemDoc.id).delete()
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("InventoryVM", "Error purging fake transactions in Firestore", e)
+                    }
+                }
 
                 val demoMerekAlat = listOf("ASUS", "Epson", "Canon", "Hikvision", "Polytron", "Logitech", "Makita", "Bosch", "Dekko", "Philips", "Lenovo", "HP", "Samsung", "Panasonic", "Sony", "BenQ", "Hitachi", "Acer", "SanDisk", "Toshiba", "Seagate", "WD", "MSI")
                 val demoMerekBahan = listOf("PaperOne", "Joyko", "Kenko", "Sinar Dunia", "Faber-Castell", "Aica Aibon", "3M", "Alteco", "Kenmaster", "Kangaroo", "Standard", "Pilot", "Snowman", "Chappy", "Greebel")
@@ -280,7 +330,11 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                                         detailTujuan = detailTujuan,
                                         isDemo = isDemo
                                     )
-                                    db.inventoryDao().insertTransaction(tx)
+                                    if (!com.example.data.entity.isFakeLoanTransaction(idTransaksi, status, kelas, namaPeminjam)) {
+                                        db.inventoryDao().insertTransaction(tx)
+                                    } else {
+                                        db.inventoryDao().deleteTransactionById(idTransaksi)
+                                    }
                                 }
                                 Log.d("InventoryVM", "Realtime updated ${snapshot.size()} transactions from Firestore to Room")
                             } catch (e: Exception) {
@@ -2274,27 +2328,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     repository.updateItem(updatedItemEntity)
                     firebaseService.saveItemToFirestore(updatedItemEntity)
 
-                    val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                    val currentDate = sdfDate.format(Date())
-                    val currentTime = sdfTime.format(Date())
-                    val auditTx = com.example.data.entity.LoanTransactionEntity(
-                        idTransaksi = "TX-INP-${System.currentTimeMillis()}",
-                        tanggal = currentDate,
-                        waktu = currentTime,
-                        namaPeminjam = "Penambahan Stok: ${name.trim()}",
-                        kelas = "Sistem / Aset",
-                        kondisi = kondisi.trim().ifEmpty { "Baik" },
-                        namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                        status = "Aset Baru",
-                        tanggalKembali = currentDate,
-                        waktuKembali = currentTime,
-                        kondisiKembali = kondisi.trim().ifEmpty { "Baik" },
-                        petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                        keteranganKerusakan = "Stok bahan bertambah $stokAwal $satuan. Total stok awal sekarang: $newStokAwal."
-                    )
-                    db.inventoryDao().insertTransaction(auditTx)
-                    firebaseService.saveTransactionToFirestore(auditTx)
                     getAllBahan()
                     onSuccess()
                     return@launch
@@ -2356,28 +2389,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 firebaseService.saveItemToFirestore(itemEntity)
 
-                // Log to loan_transactions for Stock Management
-                val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                val currentDate = sdfDate.format(Date())
-                val currentTime = sdfTime.format(Date())
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-INP-${System.currentTimeMillis()}",
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Input Baru: ${name.trim()}",
-                    kelas = "Sistem / Aset",
-                    kondisi = kondisi.trim().ifEmpty { "Baik" },
-                    namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                    status = "Aset Baru",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = kondisi.trim().ifEmpty { "Baik" },
-                    petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                    keteranganKerusakan = "Barang baru didaftarkan ke sistem dengan stok awal $stokAwal $satuan di ruang $ruang."
-                )
-                db.inventoryDao().insertTransaction(auditTx)
-
                 // Sync with sheets in background if configured and auto-sync is on
                 val webAppUrl = sheetsUrl.value
                 if (webAppUrl.isNotEmpty() && autoSyncEnabled.value) {
@@ -2398,6 +2409,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 // Force UI Update / Reactive Refresh: pemanggilan ulang fungsi pengambil data (getAllBahan)
                 getAllBahan()
+
+                logSystemActivity(
+                    activityType = "Tambah Manual",
+                    subjectName = name.trim(),
+                    details = "Menambahkan bahan/logistik baru '${name.trim()}' (Kategori: ${kategori.trim()}, Merek: ${merekAlat.trim()}, Ruang: ${ruang.trim()}, Stok: $stokAwal ${satuan.trim()}) secara manual.",
+                    officerName = defaultOfficer.value
+                )
 
                 onSuccess()
             } catch (e: Exception) {
@@ -2457,26 +2475,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     repository.updateItem(updatedItemEntity)
                     firebaseService.saveItemToFirestore(updatedItemEntity)
 
-                    val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                    val currentDate = sdfDate.format(Date())
-                    val currentTime = sdfTime.format(Date())
-                    val auditTx = com.example.data.entity.LoanTransactionEntity(
-                        idTransaksi = "TX-INP-${System.currentTimeMillis()}",
-                        tanggal = currentDate,
-                        waktu = currentTime,
-                        namaPeminjam = "Penambahan Stok: ${name.trim()}",
-                        kelas = "Sistem / Aset",
-                        kondisi = kondisi.trim().ifEmpty { "Baik" },
-                        namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                        status = "Aset Baru",
-                        tanggalKembali = currentDate,
-                        waktuKembali = currentTime,
-                        kondisiKembali = kondisi.trim().ifEmpty { "Baik" },
-                        petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                        keteranganKerusakan = "Stok alat bertambah $stokAwal $satuan. Total stok awal sekarang: $newStokAwal."
-                    )
-                    db.inventoryDao().insertTransaction(auditTx)
                     onSuccess()
                     return@launch
                 }
@@ -2537,27 +2535,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 firebaseService.saveItemToFirestore(itemEntity)
 
-                // Log to loan_transactions for Stock Management
-                val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                val currentDate = sdfDate.format(Date())
-                val currentTime = sdfTime.format(Date())
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-INP-${System.currentTimeMillis()}",
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Input Baru: ${name.trim()}",
-                    kelas = "Sistem / Aset",
-                    kondisi = kondisi.trim().ifEmpty { "Baik" },
-                    namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                    status = "Aset Baru",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = kondisi.trim().ifEmpty { "Baik" },
-                    petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                    keteranganKerusakan = "Barang baru didaftarkan ke sistem dengan stok awal $stokAwal $satuan di ruang $ruang."
+                logSystemActivity(
+                    activityType = "Tambah Manual",
+                    subjectName = name.trim(),
+                    details = "Menambahkan ${if (type == "LABKOM") "PC Unit LabKom" else if (type == "BAHAN") "Bahan/Logistik" else "Alat/Barang"} baru '${name.trim()}' (Kategori: ${kategori.trim()}, Merek: ${merekAlat.trim()}, Ruang: ${ruang.trim()}, Stok: $stokAwal ${satuan.trim()}) secara manual.",
+                    officerName = defaultOfficer.value
                 )
-                db.inventoryDao().insertTransaction(auditTx)
 
                 // Sync with sheets in background if configured and auto-sync is on
                 val webAppUrl = sheetsUrl.value
@@ -2676,28 +2659,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 )
                 firebaseService.saveItemToFirestore(updatedItemEntity)
 
-                // Log to loan_transactions for Unified Transaction Audit & Reports
-                val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                val currentDate = sdfDate.format(Date())
-                val currentTime = sdfTime.format(Date())
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-PMK-${System.currentTimeMillis()}",
-                    tanggal = if (tanggalPemakaian.isNotBlank()) tanggalPemakaian else currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Pemakaian: ${namaPeminta.trim()}" + if (!kelas.isNullOrBlank()) " ($kelas)" else "",
-                    kelas = if (!kelas.isNullOrBlank()) kelas.trim() else "Pemakaian Bahan",
-                    kondisi = "Habis Pakai",
-                    namaPetugas = namaPetugas.trim(),
-                    status = "Pemakaian Bahan",
-                    tanggalKembali = if (tanggalPemakaian.isNotBlank()) tanggalPemakaian else currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = "Habis Pakai",
-                    petugasKembali = namaPetugas.trim(),
-                    keteranganKerusakan = "Pemakaian bahan $namaBarang sebanyak $jumlahDiambil $satuan oleh ${namaPeminta.trim()} ($jabatan)."
+                logSystemActivity(
+                    activityType = "Pemakaian Bahan",
+                    subjectName = "$namaBarang ($jumlahDiambil $satuan oleh ${namaPeminta.trim()})",
+                    details = "Pemakaian bahan $namaBarang sebanyak $jumlahDiambil $satuan oleh ${namaPeminta.trim()} ($jabatan).",
+                    officerName = namaPetugas.trim()
                 )
-                db.inventoryDao().insertTransaction(auditTx)
-                firebaseService.saveTransactionToFirestore(auditTx)
 
                 onSuccess()
             } catch (e: Exception) {
@@ -2784,27 +2751,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     firebaseService.saveItemToFirestore(updatedItemEntity)
                 }
 
-                // Log to loan_transactions for Condition & Maintenance
-                val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                val currentDate = sdfDate.format(Date())
-                val currentTime = sdfTime.format(Date())
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-AFK-${System.currentTimeMillis()}",
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Bahan Afkir: $namaBarang",
-                    kelas = "Kondisi & Pemeliharaan",
-                    kondisi = "Afkir",
-                    namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                    status = "Afkir",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = "Afkir",
-                    petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                    keteranganKerusakan = "Pencatatan bahan afkir sebanyak $jumlahAfkir $satuan. Alasan: $alasan"
+                logSystemActivity(
+                    activityType = "Bahan Afkir",
+                    subjectName = "$namaBarang ($jumlahAfkir $satuan)",
+                    details = "Pencatatan bahan afkir sebanyak $jumlahAfkir $satuan. Alasan: $alasan",
+                    officerName = defaultOfficer.value
                 )
-                db.inventoryDao().insertTransaction(auditTx)
 
                 onSuccess()
             } catch (e: Exception) {
@@ -2907,24 +2859,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 repository.recordDamagedReport(newReport)
 
-                // Log to loan_transactions for Condition & Maintenance
-                val isMaint = status.contains("Servis") || status.contains("Pemeliharaan") || kondisiBaru.contains("Perbaikan")
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-DMG-${System.currentTimeMillis()}",
-                    tanggal = tanggalKerusakan,
-                    waktu = waktuKerusakan,
-                    namaPeminjam = if (isMaint) "Sedang Servis: $namaBarang" else "Barang Rusak: $namaBarang",
-                    kelas = "Kondisi & Pemeliharaan",
-                    kondisi = kondisiBaru,
-                    namaPetugas = namaPetugas,
-                    status = if (isMaint) "Servis" else "Rusak",
-                    tanggalKembali = tanggalKerusakan,
-                    waktuKembali = waktuKerusakan,
-                    kondisiKembali = kondisiBaru,
-                    petugasKembali = namaPetugas,
-                    keteranganKerusakan = "Pencatatan $status sebanyak $jumlah unit. Keterangan: $keteranganKerusakan"
+                logSystemActivity(
+                    activityType = if (isMaint) "Laporan Servis" else "Laporan Kerusakan",
+                    subjectName = "$namaBarang ($jumlah unit)",
+                    details = "Pencatatan $status sebanyak $jumlah unit. Keterangan: $keteranganKerusakan",
+                    officerName = namaPetugas
                 )
-                db.inventoryDao().insertTransaction(auditTx)
 
                 onSuccess()
             } catch (e: Exception) {
@@ -2978,24 +2918,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     currentTime = currentTime
                 )
 
-                // Save audit transaction to Firestore for real-time remote sync
-                val isSelesai = newStatus.contains("Normal") || newStatus.contains("Selesai")
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-AUD-${System.currentTimeMillis()}",
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = if (isSelesai) "Pemeliharaan Selesai / Kembali Normal" else "Ubah Status: $newStatus",
-                    kelas = "Pemeliharaan & Perbaikan",
-                    kondisi = newStatus,
-                    namaPetugas = officerName,
-                    status = if (isSelesai) "Selesai" else newStatus,
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = newStatus,
-                    petugasKembali = officerName,
-                    keteranganKerusakan = "Status pemeliharaan/alat diubah menjadi '$newStatus'. Catatan: ${alasan.trim()}"
+                logSystemActivity(
+                    activityType = "Ubah Status Pemeliharaan",
+                    subjectName = "ID #$damagedId ($newStatus)",
+                    details = "Status pemeliharaan/alat diubah menjadi '$newStatus'. Catatan: ${alasan.trim()}",
+                    officerName = officerName
                 )
-                firebaseService.saveTransactionToFirestore(auditTx)
 
                 onSuccess()
             } catch (e: Exception) {
@@ -3022,24 +2950,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 repository.validateDamagedItem(id, currentDate, officer, notes.trim())
 
-                // Record audit log
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-VAL-${System.currentTimeMillis()}",
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Validasi Alat Rusak",
-                    kelas = "Audit Validation",
-                    kondisi = "Terverifikasi",
-                    namaPetugas = officer,
-                    status = "Validasi Petugas",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = "Terverifikasi",
-                    petugasKembali = officer,
-                    keteranganKerusakan = "Pengecekan dan validasi kondisi alat rusak oleh petugas '$officer'. Catatan: ${notes.trim()}"
+                logSystemActivity(
+                    activityType = "Validasi Alat Rusak",
+                    subjectName = "ID #$id",
+                    details = "Pengecekan dan validasi kondisi alat rusak oleh petugas '$officer'. Catatan: ${notes.trim()}",
+                    officerName = officer
                 )
-                db.inventoryDao().insertTransaction(auditTx)
-                firebaseService.saveTransactionToFirestore(auditTx)
 
                 onSuccess()
             } catch (e: Exception) {
@@ -3405,6 +3321,14 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     catatanModifikasi = ""
                 )
                 repository.insertPeripheralStock(stock)
+
+                logSystemActivity(
+                    activityType = "Tambah Manual",
+                    subjectName = namaItem.trim(),
+                    details = "Menambahkan stok peripheral baru '${namaItem.trim()}' (${jenisPeripheral.trim()} - Merek: ${merek.trim()}, Ruang: ${lokasiRuang.trim()}, Jumlah: $jumlah ${satuan.ifBlank { "Unit" }}) secara manual.",
+                    officerName = defaultOfficer.value
+                )
+
                 onSuccess()
             } catch (e: Exception) {
                 onError("Gagal menyimpan stok peripheral: ${e.localizedMessage ?: "Terjadi kesalahan"}")
@@ -3556,6 +3480,15 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
 
+                if (added > 0 || updated > 0) {
+                    logSystemActivity(
+                        activityType = "Impor Massal",
+                        subjectName = "Impor Massal Excel Peripheral ($added data baru, $updated diperbarui)",
+                        details = "Berhasil mengimpor ${added + updated} data stok peripheral secara massal via file Excel/CSV.",
+                        officerName = defaultOfficer.value
+                    )
+                }
+
                 onSuccess(added, updated)
             } catch (e: Exception) {
                 onError("Gagal mengimpor data peripheral: ${e.localizedMessage ?: "Terjadi kesalahan"}")
@@ -3673,27 +3606,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 val officer = if (officerName.isBlank()) defaultOfficer.value.ifBlank { "Administrator" } else officerName.trim()
                 repository.updateBahanAfkirStatusCustom(idAfkir, "Hapus Aset")
                 
-                val sdfDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("id", "ID"))
-                val sdfTime = java.text.SimpleDateFormat("HH:mm", java.util.Locale("id", "ID"))
-                val currentDate = sdfDate.format(java.util.Date())
-                val currentTime = sdfTime.format(java.util.Date())
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-AFK-TRF-" + System.currentTimeMillis(),
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Transfer Afkir Ke Hapus Aset: $idAfkir",
-                    kelas = "Hapus Aset",
-                    kondisi = "Hapus Aset",
-                    namaPetugas = officer,
-                    status = "Hapus Aset",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = "Hapus Aset",
-                    petugasKembali = officer,
-                    keteranganKerusakan = "Bahan afkir $idAfkir dialihkan ke Menu Hapus Aset."
+                logSystemActivity(
+                    activityType = "Transfer Hapus Aset",
+                    subjectName = "ID Afkir #$idAfkir",
+                    details = "Bahan afkir $idAfkir dialihkan ke Menu Hapus Aset.",
+                    officerName = officer
                 )
-                db.inventoryDao().insertTransaction(auditTx)
-                firebaseService.saveTransactionToFirestore(auditTx)
                 onSuccess()
             } catch (e: Exception) {
                 onError("Gagal memindahkan bahan afkir ke Hapus Aset: ${e.localizedMessage ?: "Terjadi kesalahan"}")
@@ -3718,27 +3636,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 val officer = if (officerName.isBlank()) defaultOfficer.value.ifBlank { "Administrator" } else officerName.trim()
                 repository.updateBahanAfkirStatusCustom(idAfkir, "Hibah")
                 
-                val sdfDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("id", "ID"))
-                val sdfTime = java.text.SimpleDateFormat("HH:mm", java.util.Locale("id", "ID"))
-                val currentDate = sdfDate.format(java.util.Date())
-                val currentTime = sdfTime.format(java.util.Date())
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-AFK-HIB-" + System.currentTimeMillis(),
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Hibah Bahan Afkir: $idAfkir",
-                    kelas = "Hibah Aset",
-                    kondisi = "Hibah",
-                    namaPetugas = officer,
-                    status = "Hibah",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = "Hibah",
-                    petugasKembali = officer,
-                    keteranganKerusakan = "Bahan afkir $idAfkir dihibahkan kepada $penerima. Alasan: $alasan"
+                logSystemActivity(
+                    activityType = "Hibah Bahan Afkir",
+                    subjectName = "ID Afkir #$idAfkir ($penerima)",
+                    details = "Bahan afkir $idAfkir dihibahkan kepada $penerima. Alasan: $alasan",
+                    officerName = officer
                 )
-                db.inventoryDao().insertTransaction(auditTx)
-                firebaseService.saveTransactionToFirestore(auditTx)
                 onSuccess()
             } catch (e: Exception) {
                 onError("Gagal mencatat hibah bahan afkir: ${e.localizedMessage ?: "Terjadi kesalahan"}")
@@ -3785,30 +3688,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 repository.updateItem(updatedEntity)
                 firebaseService.saveItemToFirestore(updatedEntity)
 
-                val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                val currentDate = sdfDate.format(Date())
-                val currentTime = sdfTime.format(Date())
-                val officerName = if (namaPetugas.isBlank()) defaultOfficer.value.ifBlank { "Administrator" } else namaPetugas.trim()
-
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-ADD-${System.currentTimeMillis()}",
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Tambah Stok (+${jumlahTambah}): ${existing.namaBarang}",
-                    kelas = "Tambah Stok Gudang",
-                    kondisi = existing.kondisi.ifBlank { "Normal" },
-                    namaPetugas = officerName,
-                    status = "Tambah Stok",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = existing.kondisi.ifBlank { "Normal" },
-                    petugasKembali = officerName,
-                    keteranganKerusakan = "Penambahan stok masuk sebanyak $jumlahTambah ${existing.satuan.ifEmpty { "Pcs" }} (Stok fisik lama: ${existing.stokAwal} -> Baru: $newStokAwal). ${if (catatan.isNotBlank()) "Catatan: $catatan" else ""}"
-                )
-                db.inventoryDao().insertTransaction(auditTx)
-                firebaseService.saveTransactionToFirestore(auditTx)
-
                 onSuccess()
             } catch (e: Exception) {
                 onError("Gagal menambah stok: ${e.localizedMessage ?: "Terjadi kesalahan"}")
@@ -3843,29 +3722,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 )
                 repository.updateItem(item)
                 firebaseService.saveItemToFirestore(item)
-
-                // Log to loan_transactions for Stock Management
-                val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                val currentDate = sdfDate.format(Date())
-                val currentTime = sdfTime.format(Date())
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-OPN-${System.currentTimeMillis()}",
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Stock Opname: $namaBarang",
-                    kelas = "Sistem / Aset",
-                    kondisi = "Normal",
-                    namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                    status = "Stock Opname",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = "Normal",
-                    petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                    keteranganKerusakan = "Penyesuaian stok awal melalui Stock Opname dari ${existing?.stokAwal ?: 0} menjadi $stokAwal."
-                )
-                db.inventoryDao().insertTransaction(auditTx)
-                firebaseService.saveTransactionToFirestore(auditTx)
 
                 // Sync in background
                 val webAppUrl = sheetsUrl.value
@@ -3935,30 +3791,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 repository.updateItem(item)
                 firebaseService.saveItemToFirestore(item)
 
-                // Log to loan_transactions for Stock Management (Room Transfer)
-                if (existing != null && existing.ruang != ruang) {
-                    val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                    val currentDate = sdfDate.format(Date())
-                    val currentTime = sdfTime.format(Date())
-                    val auditTx = com.example.data.entity.LoanTransactionEntity(
-                        idTransaksi = "TX-RUM-${System.currentTimeMillis()}",
-                        tanggal = currentDate,
-                        waktu = currentTime,
-                        namaPeminjam = "Pindah Ruangan: $namaBarang",
-                        kelas = "Sistem / Aset",
-                        kondisi = kondisi,
-                        namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                        status = "Pindah Ruangan",
-                        tanggalKembali = currentDate,
-                        waktuKembali = currentTime,
-                        kondisiKembali = kondisi,
-                        petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                        keteranganKerusakan = "Aset dipindahkan dari ruang '${existing.ruang}' ke '$ruang'."
-                    )
-                    db.inventoryDao().insertTransaction(auditTx)
-                }
-
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.localizedMessage ?: "Gagal memperbarui data barang")
@@ -3979,29 +3811,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 repository.deleteItemById(idBarang)
                 firebaseService.deleteItemFromFirestore(idBarang)
-
-                // Audit transaction log for item deletion
-                val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                val currentDate = sdfDate.format(Date())
-                val currentTime = sdfTime.format(Date())
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-DEL-${System.currentTimeMillis()}",
-                    tanggal = currentDate,
-                    waktu = currentTime,
-                    namaPeminjam = "Hapus Master Aset: $itemName",
-                    kelas = "Sistem / Aset",
-                    kondisi = "Dihapus",
-                    namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                    status = "Hapus Aset",
-                    tanggalKembali = currentDate,
-                    waktuKembali = currentTime,
-                    kondisiKembali = "Dihapus",
-                    petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                    keteranganKerusakan = "Hapus permanen barang/bahan '$itemName' (ID: $idBarang) dari master gudang."
-                )
-                db.inventoryDao().insertTransaction(auditTx)
-                firebaseService.saveTransactionToFirestore(auditTx)
 
                 onSuccess()
             } catch (e: Exception) {
@@ -4574,27 +4383,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 if (result.isSuccess) {
                     _lastSyncTime.value = settingsRepository.getLastSyncTime()
                     
-                    // Log to loan_transactions for System Activity
-                    val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    val sdfTime = SimpleDateFormat("HH:mm", Locale.US)
-                    val currentDate = sdfDate.format(Date())
-                    val currentTime = sdfTime.format(Date())
-                    val auditTx = com.example.data.entity.LoanTransactionEntity(
-                        idTransaksi = "TX-SYN-${System.currentTimeMillis()}",
-                        tanggal = currentDate,
-                        waktu = currentTime,
-                        namaPeminjam = "Sinkronisasi Google Sheets",
-                        kelas = "Aktivitas Sistem",
-                        kondisi = "Normal",
-                        namaPetugas = defaultOfficer.value.ifBlank { "Administrator" },
-                        status = "Sukses",
-                        tanggalKembali = currentDate,
-                        waktuKembali = currentTime,
-                        kondisiKembali = "Normal",
-                        petugasKembali = defaultOfficer.value.ifBlank { "Administrator" },
-                        keteranganKerusakan = "Sinkronisasi database lokal dengan Google Sheets berhasil dilakukan secara real-time."
+                    logSystemActivity(
+                        activityType = "Sinkronisasi Sheets",
+                        subjectName = "Google Sheets",
+                        details = "Sinkronisasi database lokal dengan Google Sheets berhasil dilakukan secara real-time.",
+                        officerName = defaultOfficer.value
                     )
-                    db.inventoryDao().insertTransaction(auditTx)
                 } else {
                     _syncError.value = result.exceptionOrNull()?.message ?: "Gagal menyinkronkan data."
                 }
@@ -4893,6 +4687,16 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
                 
+                if (added > 0 || updated > 0) {
+                    val typeLabel = defaultType ?: "Alat/Bahan"
+                    logSystemActivity(
+                        activityType = "Impor Massal",
+                        subjectName = "Impor Massal Excel $typeLabel ($added data baru, $updated diperbarui)",
+                        details = "Berhasil mengimpor ${added + updated} data inventaris $typeLabel secara massal via file Excel/CSV.",
+                        officerName = defaultOfficer.value
+                    )
+                }
+
                 onSuccess(added, updated)
             } catch (e: Exception) {
                 onError(e.localizedMessage ?: "Gagal memproses data CSV")
@@ -5372,19 +5176,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 }
 
-                // Log audit transaction
-                val auditTx = com.example.data.entity.LoanTransactionEntity(
-                    idTransaksi = "TX-MUT-${System.currentTimeMillis()}",
-                    tanggal = tanggalMutasi.ifBlank { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) },
-                    namaPeminjam = "Mutasi Perangkat: $namaBarang",
-                    kelas = "Mutasi $jenisPerangkat",
-                    waktu = SimpleDateFormat("HH:mm", Locale.US).format(Date()),
-                    kondisi = "MUTASI",
-                    namaPetugas = finalPetugas,
-                    status = "Selesai",
-                    keteranganKerusakan = "Mutasi dari '$ruangAsal' ke '$ruangTujuan'. Alasan: $alasanMutasi"
+                logSystemActivity(
+                    activityType = "Mutasi Perangkat",
+                    subjectName = "$namaBarang ($ruangAsal -> $ruangTujuan)",
+                    details = "Mutasi dari '$ruangAsal' ke '$ruangTujuan'. Alasan: $alasanMutasi",
+                    officerName = finalPetugas
                 )
-                db.inventoryDao().insertTransaction(auditTx)
 
                 onSuccess()
             } catch (e: Exception) {
