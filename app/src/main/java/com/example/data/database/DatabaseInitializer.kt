@@ -64,8 +64,8 @@ object DatabaseInitializer {
                 val currentKondisi = settingsRepo.getKondisi()
                 if (currentKondisi.isEmpty()) {
                     val defaultKondisi = listOf(
-                        "Baik", "Rusak", "Pemeliharaan", "Expired"
-                    ).sorted()
+                        "Normal / Baik", "Expired / Afkir", "Rusak", "Pemeliharaan", "Rusak Fisik"
+                    )
                     settingsRepo.saveKondisi(defaultKondisi)
                 }
 

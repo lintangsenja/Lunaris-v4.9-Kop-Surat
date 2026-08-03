@@ -128,7 +128,7 @@ fun ItemWithStock.toPcUnitData(): PcUnitData {
         kapasitasStorage = stgC,
         layarInch = layar,
         labRoom = ruang.ifBlank { "Lab Komputer 1" },
-        status = kondisi.ifBlank { "Baik / Normal" },
+        status = kondisi.ifBlank { "Normal / Baik" },
         sumberDana = sumberDana ?: "",
         qty = if (stokAwal > 0) stokAwal else 1,
         satuan = satuan.ifBlank { "Unit" },
@@ -273,6 +273,9 @@ fun LabKomScreen(
     var selectedUnitForEdit by remember { mutableStateOf<PcUnitData?>(null) }
     var unitToDelete by remember { mutableStateOf<PcUnitData?>(null) }
     var selectedUnitForDetail by remember { mutableStateOf<PcUnitData?>(null) }
+
+    var selectedUnitIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showBatchDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     var showDiagnosisDialog by remember { mutableStateOf(false) }
     var selectedUnitForDiagnosis by remember { mutableStateOf<PcUnitData?>(null) }
@@ -566,8 +569,8 @@ fun LabKomScreen(
                                 "Layar", "Ruang", "Kondisi", "Sumber Dana", "Qty", "Satuan", "Keterangan"
                             )
                             val templateRows = listOf(
-                                listOf("PC Desktop", "SN-ASUS-2026-001", "PC LabKom 01", "PC-LAB1-001", "Asus", "DDR4", "16 GB", "SSD NVMe", "512 GB", "Intel Core i5-10400F @ 2.90GHz", "24 Inch", "Lab Komputer 1", "Baik / Normal", "BOS", "1", "Unit", "Unit PC Siap Pakai Praktikum"),
-                                listOf("Workstation", "SN-DELL-2026-089", "Workstation Design 02", "PC-LAB2-002", "Dell", "DDR4", "32 GB", "SSD NVMe", "1 TB", "Intel Core i7-12700K @ 3.60GHz", "27 Inch", "Lab Komputer 2", "Baik / Normal", "BOS Reguler", "1", "Unit", "Unit PC High End Grafis")
+                                listOf("PC Desktop", "SN-ASUS-2026-001", "PC LabKom 01", "PC-LAB1-001", "Asus", "DDR4", "16 GB", "SSD NVMe", "512 GB", "Intel Core i5-10400F @ 2.90GHz", "24 Inch", "Lab Komputer 1", "Normal / Baik", "BOS", "1", "Unit", "Unit PC Siap Pakai Praktikum"),
+                                listOf("Workstation", "SN-DELL-2026-089", "Workstation Design 02", "PC-LAB2-002", "Dell", "DDR4", "32 GB", "SSD NVMe", "1 TB", "Intel Core i7-12700K @ 3.60GHz", "27 Inch", "Lab Komputer 2", "Pemeliharaan", "BOS Reguler", "1", "Unit", "Unit PC High End Grafis")
                             )
                             val bytes = generateExcelBytes(
                                 title = "Template Impor Data PC Laboratorium Lunaris",
@@ -824,20 +827,71 @@ fun LabKomScreen(
                         }
                     }
                 } else {
+                    // Multi-select header bar
+                    if (canLabKomManage && filteredList.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val isAllSelected = filteredList.isNotEmpty() && selectedUnitIds.size == filteredList.size
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable {
+                                    selectedUnitIds = if (isAllSelected) emptySet() else filteredList.map { it.id }.toSet()
+                                }
+                            ) {
+                                Checkbox(
+                                    checked = isAllSelected,
+                                    onCheckedChange = { checked ->
+                                        selectedUnitIds = if (checked) filteredList.map { it.id }.toSet() else emptySet()
+                                    },
+                                    modifier = Modifier.testTag("checkbox_select_all_labkom")
+                                )
+                                Text(
+                                    text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${filteredList.size})",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            if (selectedUnitIds.isNotEmpty()) {
+                                Button(
+                                    onClick = { showBatchDeleteConfirmDialog = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.testTag("btn_hapus_terpilih_labkom")
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Hapus Terpilih (${selectedUnitIds.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         items(filteredList, key = { it.id }) { pc ->
+                            val isSelected = selectedUnitIds.contains(pc.id)
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
                                     .clickable { selectedUnitForDetail = pc },
                                 shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)),
-                                border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFE9D5FF)),
+                                colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFFF3E8FF) else if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)),
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) Color(0xFF7C3AED) else if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFE9D5FF)
+                                ),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {
@@ -850,6 +904,15 @@ fun LabKomScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
+                                            if (canLabKomManage) {
+                                                Checkbox(
+                                                    checked = isSelected,
+                                                    onCheckedChange = { checked ->
+                                                        selectedUnitIds = if (checked) selectedUnitIds + pc.id else selectedUnitIds - pc.id
+                                                    },
+                                                    modifier = Modifier.testTag("checkbox_pc_${pc.id}")
+                                                )
+                                            }
                                             Surface(
                                                 color = Color(0xFFF3E8FF),
                                                 shape = RoundedCornerShape(8.dp)
@@ -986,6 +1049,23 @@ fun LabKomScreen(
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                 }
+
+                                                // Single Delete Button
+                                                IconButton(
+                                                    onClick = {
+                                                        unitToDelete = pc
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .testTag("btn_hapus_pc_${pc.id}")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = "Hapus Unit PC",
+                                                        tint = Color(0xFFDC2626),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1073,7 +1153,7 @@ fun LabKomScreen(
         AlertDialog(
             onDismissRequest = { unitToDelete = null },
             title = { Text("Konfirmasi Hapus Unit PC", fontWeight = FontWeight.Bold) },
-            text = { Text("Apakah Anda yakin ingin menghapus unit '${unit.name}' (${unit.id}) dari inventaris LabKom?") },
+            text = { Text("Apakah Anda yakin ingin menghapus unit '${unit.name}' (${unit.id}) secara permanen dari database lokal dan Firestore? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -1089,13 +1169,52 @@ fun LabKomScreen(
                             }
                         )
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("dialog_btn_confirm_delete_pc")
                 ) {
                     Text("Hapus Unit")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { unitToDelete = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Dialog Konfirmasi Hapus Massal (Batch Delete PC LabKom)
+    if (showBatchDeleteConfirmDialog && selectedUnitIds.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteConfirmDialog = false },
+            title = { Text("Konfirmasi Hapus ${selectedUnitIds.size} Unit PC", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus ${selectedUnitIds.size} unit PC terpilih secara permanen dari database lokal dan Firestore? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import) dan tindakan ini tidak dapat dibatalkan.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val idsToDelete = selectedUnitIds.toList()
+                        var deletedCount = 0
+                        idsToDelete.forEach { id ->
+                            viewModel.deleteItem(
+                                idBarang = id,
+                                onSuccess = { deletedCount++ },
+                                onError = {}
+                            )
+                        }
+                        Toast.makeText(context, "Berhasil menghapus $deletedCount unit PC!", Toast.LENGTH_SHORT).show()
+                        selectedUnitIds = emptySet()
+                        showBatchDeleteConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_labkom")
+                ) {
+                    Text("Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteConfirmDialog = false }) {
                     Text("Batal")
                 }
             }
@@ -1295,7 +1414,7 @@ fun AddEditPcUnitDialog(
     val kapasitasRamOptions = if (kapasitasRamList.isNotEmpty()) kapasitasRamList else listOf("4 GB", "8 GB", "16 GB", "32 GB", "64 GB")
     val storageOptions = if (storageList.isNotEmpty()) storageList else listOf("SSD NVMe", "SSD SATA", "HDD 3.5\"", "SSHD", "Dual Storage (SSD+HDD)")
     val ruangOptions = if (ruangList.isNotEmpty()) ruangList else listOf("Lab Komputer 1", "Lab Komputer 2", "Lab Server / NOC", "Lab Multimedia")
-    val kondisiOptions = if (kondisiList.isNotEmpty()) kondisiList else listOf("Baik / Normal", "Rusak Ringan", "Rusak Berat", "Dalam Perbaikan / Pemeliharaan")
+    val kondisiOptions = if (kondisiList.isNotEmpty()) kondisiList else listOf("Normal / Baik", "Expired / Afkir", "Rusak", "Pemeliharaan", "Rusak Fisik")
     val sumberDanaOptions = if (sumberDanaList.isNotEmpty()) sumberDanaList else listOf("BOS", "BOPD", "Komite", "Hibah", "APBD")
     val satuanOptions = if (unitsList.isNotEmpty()) unitsList.map { it.name } else listOf("Unit", "Set", "Pcs", "Buah")
 
@@ -1317,7 +1436,7 @@ fun AddEditPcUnitDialog(
     var layarInch by remember(initialUnit) { mutableStateOf(initialUnit?.layarInch ?: "") }
 
     var labRoom by remember(initialUnit) { mutableStateOf(initialUnit?.labRoom ?: (ruangOptions.firstOrNull() ?: "Lab Komputer 1")) }
-    var kondisi by remember(initialUnit) { mutableStateOf(initialUnit?.status ?: (kondisiOptions.firstOrNull() ?: "Baik / Normal")) }
+    var kondisi by remember(initialUnit) { mutableStateOf(initialUnit?.status ?: (kondisiOptions.firstOrNull() ?: "Normal / Baik")) }
     var sumberDana by remember(initialUnit) { mutableStateOf(initialUnit?.sumberDana ?: "") } // Default empty
     var qty by remember(initialUnit) { mutableStateOf(initialUnit?.qty?.toString() ?: "1") }
     var satuan by remember(initialUnit) { mutableStateOf(initialUnit?.satuan ?: (satuanOptions.firstOrNull() ?: "Unit")) }

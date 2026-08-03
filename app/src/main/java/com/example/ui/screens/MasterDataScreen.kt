@@ -1084,9 +1084,11 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     var selectedCategoryForEdit by remember { mutableStateOf<CategoryEntity?>(null) }
     var selectedCategoryForDelete by remember { mutableStateOf<CategoryEntity?>(null) }
+    var selectedCategoryIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
     var addInput by remember { mutableStateOf("") }
     var editInput by remember { mutableStateOf("") }
@@ -1240,18 +1242,66 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
                     Text("Data belum tersedia.", color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray)
                 }
             } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val isAllSelected = categories.isNotEmpty() && selectedCategoryIds.size == categories.size
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            selectedCategoryIds = if (isAllSelected) emptySet<Int>() else categories.map { it.id }.toSet()
+                        }
+                    ) {
+                        Checkbox(
+                            checked = isAllSelected,
+                            onCheckedChange = { checked ->
+                                selectedCategoryIds = if (checked) categories.map { it.id }.toSet() else emptySet<Int>()
+                            },
+                            modifier = Modifier.testTag("checkbox_select_all_kategori")
+                        )
+                        Text(
+                            text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${categories.size})",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    if (selectedCategoryIds.isNotEmpty()) {
+                        Button(
+                            onClick = { showBatchDeleteDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("btn_hapus_terpilih_kategori")
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Hapus Terpilih (${selectedCategoryIds.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+                }
+
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 160.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(categories) { category ->
+                    items(categories, key = { it.id }) { category ->
+                        val isSelected = selectedCategoryIds.contains(category.id)
                         LunarisCard(
                             shape = RoundedCornerShape(16.dp),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)),
+                            border = BorderStroke(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) Color(0xFF7C3AED) else if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)
+                            ),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)
+                                containerColor = if (isSelected) Color(0xFFF3E8FF) else if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -1262,13 +1312,25 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = category.name,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f)
-                                )
+                                ) {
+                                    Checkbox(
+                                        checked = isSelected,
+                                        onCheckedChange = { checked ->
+                                            selectedCategoryIds = if (checked) selectedCategoryIds + category.id else selectedCategoryIds - category.id
+                                        },
+                                        modifier = Modifier.testTag("checkbox_kategori_${category.id}")
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = category.name,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     IconButton(
@@ -1429,7 +1491,7 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Hapus Kategori", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Apakah Anda yakin ingin menghapus kategori '${selectedCategoryForDelete!!.name}'?")
+                Text("Apakah Anda yakin ingin menghapus kategori '${selectedCategoryForDelete!!.name}' secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.")
             },
             confirmButton = {
                 Button(
@@ -1462,6 +1524,48 @@ fun KelolaKategoriTab(viewModel: InventoryViewModel) {
             }
         )
     }
+
+    // Batch Delete Category Dialog
+    if (showBatchDeleteDialog && selectedCategoryIds.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            title = { Text("Konfirmasi Hapus ${selectedCategoryIds.size} Kategori", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus ${selectedCategoryIds.size} kategori terpilih secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import).")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val idsToDelete = selectedCategoryIds.toList()
+                        var deletedCount = 0
+                        idsToDelete.forEach { id ->
+                            viewModel.deleteCategory(
+                                id = id,
+                                onSuccess = { deletedCount++ },
+                                onError = {}
+                            )
+                        }
+                        Toast.makeText(context, "Berhasil menghapus $deletedCount kategori!", Toast.LENGTH_SHORT).show()
+                        selectedCategoryIds = emptySet()
+                        showBatchDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_kategori")
+                ) {
+                    Text("Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBatchDeleteDialog = false },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -1473,9 +1577,11 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     var selectedUnitForEdit by remember { mutableStateOf<UnitEntity?>(null) }
     var selectedUnitForDelete by remember { mutableStateOf<UnitEntity?>(null) }
+    var selectedUnitIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
     var addInput by remember { mutableStateOf("") }
     var editInput by remember { mutableStateOf("") }
@@ -1674,18 +1780,66 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
                     Text("Data belum tersedia.", color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray)
                 }
             } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val isAllSelected = units.isNotEmpty() && selectedUnitIds.size == units.size
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            selectedUnitIds = if (isAllSelected) emptySet<Int>() else units.map { it.id }.toSet()
+                        }
+                    ) {
+                        Checkbox(
+                            checked = isAllSelected,
+                            onCheckedChange = { checked ->
+                                selectedUnitIds = if (checked) units.map { it.id }.toSet() else emptySet<Int>()
+                            },
+                            modifier = Modifier.testTag("checkbox_select_all_satuan")
+                        )
+                        Text(
+                            text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${units.size})",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    if (selectedUnitIds.isNotEmpty()) {
+                        Button(
+                            onClick = { showBatchDeleteDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("btn_hapus_terpilih_satuan")
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Hapus Terpilih (${selectedUnitIds.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+                }
+
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 160.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(units) { unit ->
+                    items(units, key = { it.id }) { unit ->
+                        val isSelected = selectedUnitIds.contains(unit.id)
                         LunarisCard(
                             shape = RoundedCornerShape(16.dp),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)),
+                            border = BorderStroke(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) Color(0xFF7C3AED) else if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)
+                            ),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)
+                                containerColor = if (isSelected) Color(0xFFF3E8FF) else if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -1696,13 +1850,25 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = unit.name,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f)
-                                )
+                                ) {
+                                    Checkbox(
+                                        checked = isSelected,
+                                        onCheckedChange = { checked ->
+                                            selectedUnitIds = if (checked) selectedUnitIds + unit.id else selectedUnitIds - unit.id
+                                        },
+                                        modifier = Modifier.testTag("checkbox_satuan_${unit.id}")
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = unit.name,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     IconButton(
@@ -1863,7 +2029,7 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Hapus Satuan", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Apakah Anda yakin ingin menghapus satuan '${selectedUnitForDelete!!.name}'?")
+                Text("Apakah Anda yakin ingin menghapus satuan '${selectedUnitForDelete!!.name}' secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.")
             },
             confirmButton = {
                 Button(
@@ -1889,6 +2055,48 @@ fun KelolaSatuanTab(viewModel: InventoryViewModel) {
             dismissButton = {
                 TextButton(
                     onClick = { showDeleteDialog = false },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Batch Delete Unit Dialog
+    if (showBatchDeleteDialog && selectedUnitIds.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            title = { Text("Konfirmasi Hapus ${selectedUnitIds.size} Satuan", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus ${selectedUnitIds.size} satuan terpilih secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import).")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val idsToDelete = selectedUnitIds.toList()
+                        var deletedCount = 0
+                        idsToDelete.forEach { id ->
+                            viewModel.deleteUnit(
+                                id = id,
+                                onSuccess = { deletedCount++ },
+                                onError = {}
+                            )
+                        }
+                        Toast.makeText(context, "Berhasil menghapus $deletedCount satuan!", Toast.LENGTH_SHORT).show()
+                        selectedUnitIds = emptySet()
+                        showBatchDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_satuan")
+                ) {
+                    Text("Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBatchDeleteDialog = false },
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text("Batal")
@@ -2011,9 +2219,11 @@ fun KelolaSimpleListTab(
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     var selectedIndexForEdit by remember { mutableStateOf(-1) }
     var selectedIndexForDelete by remember { mutableStateOf(-1) }
+    var selectedItemIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
     var addInput by remember { mutableStateOf("") }
     var editInput by remember { mutableStateOf("") }
@@ -2186,18 +2396,66 @@ fun KelolaSimpleListTab(
                     Text(placeholder, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray)
                 }
             } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val isAllSelected = items.isNotEmpty() && selectedItemIndices.size == items.size
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            selectedItemIndices = if (isAllSelected) emptySet() else items.indices.toSet()
+                        }
+                    ) {
+                        Checkbox(
+                            checked = isAllSelected,
+                            onCheckedChange = { checked ->
+                                selectedItemIndices = if (checked) items.indices.toSet() else emptySet()
+                            },
+                            modifier = Modifier.testTag("checkbox_select_all_${testTagPrefix}")
+                        )
+                        Text(
+                            text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${items.size})",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    if (selectedItemIndices.isNotEmpty()) {
+                        Button(
+                            onClick = { showBatchDeleteDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("btn_hapus_terpilih_${testTagPrefix}")
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Hapus Terpilih (${selectedItemIndices.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+                }
+
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 160.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     itemsIndexed(items) { index, item ->
+                        val isSelected = selectedItemIndices.contains(index)
                         LunarisCard(
                             shape = RoundedCornerShape(16.dp),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)),
+                            border = BorderStroke(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) Color(0xFF7C3AED) else if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)
+                            ),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)
+                                containerColor = if (isSelected) Color(0xFFF3E8FF) else if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -2208,13 +2466,25 @@ fun KelolaSimpleListTab(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = item,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f)
-                                )
+                                ) {
+                                    Checkbox(
+                                        checked = isSelected,
+                                        onCheckedChange = { checked ->
+                                            selectedItemIndices = if (checked) selectedItemIndices + index else selectedItemIndices - index
+                                        },
+                                        modifier = Modifier.testTag("checkbox_${testTagPrefix}_$index")
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = item,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     IconButton(
@@ -2382,7 +2652,7 @@ fun KelolaSimpleListTab(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Hapus $menuName", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Apakah Anda yakin ingin menghapus $menuName '$itemToDelete'?")
+                Text("Apakah Anda yakin ingin menghapus $menuName '$itemToDelete' secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.")
             },
             confirmButton = {
                 Button(
@@ -2409,6 +2679,41 @@ fun KelolaSimpleListTab(
             }
         )
     }
+
+    // Batch Delete Dialog
+    if (showBatchDeleteDialog && selectedItemIndices.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            title = { Text("Konfirmasi Hapus ${selectedItemIndices.size} Data $menuName", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus ${selectedItemIndices.size} data $menuName terpilih secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import).")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newList = items.filterIndexed { idx, _ -> idx !in selectedItemIndices }
+                        onSave(newList)
+                        Toast.makeText(context, "Berhasil menghapus ${selectedItemIndices.size} data $menuName!", Toast.LENGTH_SHORT).show()
+                        selectedItemIndices = emptySet()
+                        showBatchDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_${testTagPrefix}")
+                ) {
+                    Text("Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBatchDeleteDialog = false },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -2421,9 +2726,11 @@ fun KelolaGuruMapelTab(
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     var selectedIndexForEdit by remember { mutableStateOf(-1) }
     var selectedIndexForDelete by remember { mutableStateOf(-1) }
+    var selectedGuruIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
     var addNama by remember { mutableStateOf("") }
     var addNip by remember { mutableStateOf("") }
@@ -2589,6 +2896,50 @@ fun KelolaGuruMapelTab(
                 Text("Data guru mapel belum tersedia.", color = Color.Gray)
             }
         } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val isAllSelected = items.isNotEmpty() && selectedGuruIndices.size == items.size
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+                        selectedGuruIndices = if (isAllSelected) emptySet() else items.indices.toSet()
+                    }
+                ) {
+                    Checkbox(
+                        checked = isAllSelected,
+                        onCheckedChange = { checked ->
+                            selectedGuruIndices = if (checked) items.indices.toSet() else emptySet()
+                        },
+                        modifier = Modifier.testTag("checkbox_select_all_guru_mapel")
+                    )
+                    Text(
+                        text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${items.size})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                if (selectedGuruIndices.isNotEmpty()) {
+                    Button(
+                        onClick = { showBatchDeleteDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.testTag("btn_hapus_terpilih_guru_mapel")
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Hapus Terpilih (${selectedGuruIndices.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+            }
+
             // Elegant responsive table view
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -2611,10 +2962,10 @@ fun KelolaGuruMapelTab(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Nama Guru", modifier = Modifier.weight(0.4f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
-                            Text("NIP", modifier = Modifier.weight(0.28f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
+                            Text("Nama Guru", modifier = Modifier.weight(0.38f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
+                            Text("NIP", modifier = Modifier.weight(0.26f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
                             Text("Mapel", modifier = Modifier.weight(0.18f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
-                            Text("Aksi", modifier = Modifier.weight(0.14f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText, textAlign = TextAlign.Center)
+                            Text("Aksi", modifier = Modifier.weight(0.18f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText, textAlign = TextAlign.Center)
                         }
 
                         // Data rows
@@ -2623,26 +2974,36 @@ fun KelolaGuruMapelTab(
                             val nama = parts.getOrNull(0) ?: rawItem
                             val nip = if (parts.size >= 3) parts.getOrNull(1) ?: "" else ""
                             val mapel = if (parts.size >= 3) parts.getOrNull(2) ?: "" else parts.getOrNull(1) ?: ""
+                            val isSelected = selectedGuruIndices.contains(index)
 
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(
-                                        if (isDark) {
+                                        if (isSelected) Color(0xFFF3E8FF)
+                                        else if (isDark) {
                                             if (index % 2 == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                                         } else {
                                             if (index % 2 == 0) Color.White else Color(0xFFF8FAFC)
                                         }
                                     )
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(nama, modifier = Modifier.weight(0.4f), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1E293B))
-                                Text(if (nip.isEmpty()) "-" else nip, modifier = Modifier.weight(0.28f), fontSize = 13.sp, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = { checked ->
+                                        selectedGuruIndices = if (checked) selectedGuruIndices + index else selectedGuruIndices - index
+                                    },
+                                    modifier = Modifier.size(32.dp).testTag("checkbox_guru_mapel_$index")
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(nama, modifier = Modifier.weight(0.38f), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1E293B))
+                                Text(if (nip.isEmpty()) "-" else nip, modifier = Modifier.weight(0.26f), fontSize = 13.sp, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
                                 Text(if (mapel.isEmpty()) "-" else mapel, modifier = Modifier.weight(0.18f), fontSize = 13.sp, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
 
                                 Row(
-                                    modifier = Modifier.weight(0.14f),
+                                    modifier = Modifier.weight(0.18f),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -2854,7 +3215,7 @@ fun KelolaGuruMapelTab(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Hapus Guru Mapel", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Apakah Anda yakin ingin menghapus guru '$namaToDelete'?")
+                Text("Apakah Anda yakin ingin menghapus guru '$namaToDelete' secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.")
             },
             confirmButton = {
                 Button(
@@ -2874,6 +3235,41 @@ fun KelolaGuruMapelTab(
             dismissButton = {
                 TextButton(
                     onClick = { showDeleteDialog = false },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Batch Delete Guru Mapel Dialog
+    if (showBatchDeleteDialog && selectedGuruIndices.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            title = { Text("Konfirmasi Hapus ${selectedGuruIndices.size} Guru Mapel", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus ${selectedGuruIndices.size} data guru mapel terpilih secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import).")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newList = items.filterIndexed { idx, _ -> idx !in selectedGuruIndices }
+                        viewModel.updateGuruMapel(newList)
+                        Toast.makeText(context, "Berhasil menghapus ${selectedGuruIndices.size} guru mapel!", Toast.LENGTH_SHORT).show()
+                        selectedGuruIndices = emptySet()
+                        showBatchDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_guru_mapel")
+                ) {
+                    Text("Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBatchDeleteDialog = false },
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text("Batal")
@@ -2968,9 +3364,11 @@ fun KelolaStafTab(
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     var selectedIndexForEdit by remember { mutableStateOf(-1) }
     var selectedIndexForDelete by remember { mutableStateOf(-1) }
+    var selectedStafIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
     var addNama by remember { mutableStateOf("") }
     var addNip by remember { mutableStateOf("") }
@@ -3136,6 +3534,50 @@ fun KelolaStafTab(
                 Text("Data staf belum tersedia.", color = Color.Gray)
             }
         } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val isAllSelected = items.isNotEmpty() && selectedStafIndices.size == items.size
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+                        selectedStafIndices = if (isAllSelected) emptySet() else items.indices.toSet()
+                    }
+                ) {
+                    Checkbox(
+                        checked = isAllSelected,
+                        onCheckedChange = { checked ->
+                            selectedStafIndices = if (checked) items.indices.toSet() else emptySet()
+                        },
+                        modifier = Modifier.testTag("checkbox_select_all_staf")
+                    )
+                    Text(
+                        text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${items.size})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                if (selectedStafIndices.isNotEmpty()) {
+                    Button(
+                        onClick = { showBatchDeleteDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.testTag("btn_hapus_terpilih_staf")
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Hapus Terpilih (${selectedStafIndices.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+            }
+
             // Elegant responsive table view
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -3158,10 +3600,10 @@ fun KelolaStafTab(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Nama Staf", modifier = Modifier.weight(0.4f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
-                            Text("NIP", modifier = Modifier.weight(0.28f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
+                            Text("Nama Staf", modifier = Modifier.weight(0.38f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
+                            Text("NIP", modifier = Modifier.weight(0.26f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
                             Text("Jabatan", modifier = Modifier.weight(0.18f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText)
-                            Text("Aksi", modifier = Modifier.weight(0.14f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText, textAlign = TextAlign.Center)
+                            Text("Aksi", modifier = Modifier.weight(0.18f), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText, textAlign = TextAlign.Center)
                         }
 
                         // Data rows
@@ -3170,26 +3612,36 @@ fun KelolaStafTab(
                             val nama = parts.getOrNull(0) ?: rawItem
                             val nip = if (parts.size >= 3) parts.getOrNull(1) ?: "" else ""
                             val jabatan = if (parts.size >= 3) parts.getOrNull(2) ?: "" else parts.getOrNull(1) ?: ""
+                            val isSelected = selectedStafIndices.contains(index)
 
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(
-                                        if (isDark) {
+                                        if (isSelected) Color(0xFFF3E8FF)
+                                        else if (isDark) {
                                             if (index % 2 == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                                         } else {
                                             if (index % 2 == 0) Color.White else Color(0xFFF8FAFC)
                                         }
                                     )
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(nama, modifier = Modifier.weight(0.4f), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1E293B))
-                                Text(if (nip.isEmpty()) "-" else nip, modifier = Modifier.weight(0.28f), fontSize = 13.sp, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = { checked ->
+                                        selectedStafIndices = if (checked) selectedStafIndices + index else selectedStafIndices - index
+                                    },
+                                    modifier = Modifier.size(32.dp).testTag("checkbox_staf_$index")
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(nama, modifier = Modifier.weight(0.38f), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1E293B))
+                                Text(if (nip.isEmpty()) "-" else nip, modifier = Modifier.weight(0.26f), fontSize = 13.sp, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
                                 Text(if (jabatan.isEmpty()) "-" else jabatan, modifier = Modifier.weight(0.18f), fontSize = 13.sp, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
 
                                 Row(
-                                    modifier = Modifier.weight(0.14f),
+                                    modifier = Modifier.weight(0.18f),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -3401,7 +3853,7 @@ fun KelolaStafTab(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Hapus Staf", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Apakah Anda yakin ingin menghapus staf '$namaToDelete'?")
+                Text("Apakah Anda yakin ingin menghapus staf '$namaToDelete' secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.")
             },
             confirmButton = {
                 Button(
@@ -3421,6 +3873,41 @@ fun KelolaStafTab(
             dismissButton = {
                 TextButton(
                     onClick = { showDeleteDialog = false },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Batch Delete Staf Dialog
+    if (showBatchDeleteDialog && selectedStafIndices.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            title = { Text("Konfirmasi Hapus ${selectedStafIndices.size} Staf", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus ${selectedStafIndices.size} data staf terpilih secara permanen? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import).")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newList = items.filterIndexed { idx, _ -> idx !in selectedStafIndices }
+                        viewModel.updateStaf(newList)
+                        Toast.makeText(context, "Berhasil menghapus ${selectedStafIndices.size} staf!", Toast.LENGTH_SHORT).show()
+                        selectedStafIndices = emptySet()
+                        showBatchDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_staf")
+                ) {
+                    Text("Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBatchDeleteDialog = false },
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text("Batal")

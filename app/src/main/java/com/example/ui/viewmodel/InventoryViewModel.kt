@@ -5045,7 +5045,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                             namaBarang = realItem.namaBarang,
                             jumlahAfkir = 1,
                             satuan = realItem.satuan,
-                            alasan = if (i % 2 == 0) "Kedaluwarsa" else "Rusak Fisik",
+                            alasan = if (i % 2 == 0) "Expired / Afkir" else "Rusak Fisik",
                             tanggalAfkir = "2026-07-13",
                             status = "Aktif",
                             isDemo = true

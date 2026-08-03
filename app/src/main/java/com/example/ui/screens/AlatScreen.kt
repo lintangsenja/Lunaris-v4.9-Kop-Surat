@@ -161,7 +161,7 @@ fun AlatScreen(
     }
     
     val conditionOptions = remember(kondisiList, allItems) {
-        val masterKondisi = if (kondisiList.isNotEmpty()) kondisiList else listOf("Normal", "Rusak", "Perbaikan")
+        val masterKondisi = if (kondisiList.isNotEmpty()) kondisiList else listOf("Normal / Baik", "Expired / Afkir", "Rusak", "Pemeliharaan", "Rusak Fisik")
         val itemKondisi = allItems.map { it.kondisi }.filter { it.isNotEmpty() }
         val uniqueKondisi = (masterKondisi + itemKondisi).distinct().sorted()
         listOf("Semua Kondisi") + uniqueKondisi
@@ -208,6 +208,9 @@ fun AlatScreen(
     var selectedItemForRepair by remember { mutableStateOf<ItemWithStock?>(null) }
     var selectedItemForDetail by remember { mutableStateOf<ItemWithStock?>(null) }
 
+    var selectedItemIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showBatchDeleteConfirmDialog by remember { mutableStateOf(false) }
+
     // Add Form State
     var showQuickAddType by remember { mutableStateOf<String?>(null) }
     var quickAddInputValue by remember { mutableStateOf("") }
@@ -225,7 +228,7 @@ fun AlatScreen(
     var merekAlatInput by remember { mutableStateOf("") }
     var ruangInput by remember { mutableStateOf("") }
     var sumberDanaInput by remember { mutableStateOf("Belum Diketahui / Kosongkan") }
-    var kondisiInput by remember { mutableStateOf("Normal") }
+    var kondisiInput by remember { mutableStateOf("Normal / Baik") }
     var keteranganInput by remember { mutableStateOf("") }
     var isBorrowableInput by remember { mutableStateOf(false) }
 
@@ -239,7 +242,7 @@ fun AlatScreen(
     var editMerekAlatInput by remember { mutableStateOf("") }
     var editRuangInput by remember { mutableStateOf("") }
     var editSumberDanaInput by remember { mutableStateOf("Belum Diketahui / Kosongkan") }
-    var editKondisiInput by remember { mutableStateOf("Normal") }
+    var editKondisiInput by remember { mutableStateOf("Normal / Baik") }
     var editKeteranganInput by remember { mutableStateOf("") }
     var editIsBorrowableInput by remember { mutableStateOf(selectedItemForEdit?.isBorrowable ?: false) }
 
@@ -354,7 +357,7 @@ fun AlatScreen(
                         merekAlatInput = merekAlatList.firstOrNull() ?: ""
                         ruangInput = ruangList.firstOrNull() ?: ""
                         sumberDanaInput = "Belum Diketahui / Kosongkan"
-                        kondisiInput = kondisiList.firstOrNull() ?: "Normal"
+                        kondisiInput = kondisiList.firstOrNull() ?: "Normal / Baik"
                         nameInput = ""
                         initialStockInput = "1"
                         keteranganInput = ""
@@ -497,9 +500,9 @@ fun AlatScreen(
                                     "stok_awal", "sumber_dana", "kondisi", "keterangan"
                                 )
                                 val templateRows = listOf(
-                                    listOf("Laptop ASUS Core i5", "Elektronik", "ASUS", "Lab Komputer 1", "Unit", "15", "BOS Reguler", "Sangat Baik", "Laptop untuk ujian"),
-                                    listOf("Proyektor Epson EB-X400", "Elektronik", "Epson", "Aula Utama", "Unit", "15", "BOS Kinerja", "Baik (Siap Pakai)", "Proyektor presentasi"),
-                                    listOf("Kamera DSLR Canon EOS 200D", "Elektronik", "Canon", "Studio Foto", "Unit", "5", "BOS Reguler", "Sangat Baik", "Kamera praktek siswa")
+                                    listOf("Laptop ASUS Core i5", "Elektronik", "ASUS", "Lab Komputer 1", "Unit", "15", "BOS Reguler", "Normal / Baik", "Laptop untuk ujian"),
+                                    listOf("Proyektor Epson EB-X400", "Elektronik", "Epson", "Aula Utama", "Unit", "15", "BOS Kinerja", "Pemeliharaan", "Proyektor pemeliharaan berkala"),
+                                    listOf("Kamera DSLR Canon EOS 200D", "Elektronik", "Canon", "Studio Foto", "Unit", "5", "BOS Reguler", "Rusak Fisik", "Kamera lensa retak")
                                 )
                                 val bytes = generateExcelBytes(
                                     title = "Template Impor Data Alat Lunaris",
@@ -621,6 +624,53 @@ fun AlatScreen(
                         }
                     }
                 } else {
+                    // Multi-select header bar
+                    if (userRole == "admin" && filteredItems.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val isAllSelected = filteredItems.isNotEmpty() && selectedItemIds.size == filteredItems.size
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable {
+                                    selectedItemIds = if (isAllSelected) emptySet() else filteredItems.map { it.idBarang }.toSet()
+                                }
+                            ) {
+                                Checkbox(
+                                    checked = isAllSelected,
+                                    onCheckedChange = { checked ->
+                                        selectedItemIds = if (checked) filteredItems.map { it.idBarang }.toSet() else emptySet()
+                                    },
+                                    modifier = Modifier.testTag("checkbox_select_all_alat")
+                                )
+                                Text(
+                                    text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${filteredItems.size})",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            if (selectedItemIds.isNotEmpty()) {
+                                Button(
+                                    onClick = { showBatchDeleteConfirmDialog = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.testTag("btn_hapus_terpilih_alat")
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Hapus Terpilih (${selectedItemIds.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
                     LazyColumn(
                         state = lazyListState,
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -630,11 +680,15 @@ fun AlatScreen(
                             .weight(1f)
                     ) {
                         items(filteredItems, key = { it.idBarang }) { item ->
+                            val isSelected = selectedItemIds.contains(item.idBarang)
                             LunarisCard(
                                 shape = RoundedCornerShape(16.dp),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)),
-                                colors = CardDefaults.cardColors(containerColor = cardBgColor),
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) Color(0xFF7C3AED) else if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)
+                                ),
+                                colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFFF3E8FF) else cardBgColor),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
@@ -646,58 +700,78 @@ fun AlatScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = item.namaBarang,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 15.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "ID: ${item.idBarang}",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            if (item.merekAlat.isNotEmpty() || item.ruang.isNotEmpty()) {
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                Text(
-                                                    text = buildString {
-                                                        if (item.merekAlat.isNotEmpty()) append("Merek: ${item.merekAlat}")
-                                                        if (item.ruang.isNotEmpty()) {
-                                                            if (isNotEmpty()) append(" | ")
-                                                            append("Ruang: ${item.ruang}")
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (userRole == "admin") {
+                                                Checkbox(
+                                                    checked = isSelected,
+                                                    onCheckedChange = { checked ->
+                                                        selectedItemIds = if (checked) {
+                                                            selectedItemIds + item.idBarang
+                                                        } else {
+                                                            selectedItemIds - item.idBarang
                                                         }
                                                     },
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Normal,
-                                                    color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray
+                                                    modifier = Modifier.testTag("checkbox_alat_${item.idBarang}")
                                                 )
+                                                Spacer(modifier = Modifier.width(4.dp))
                                             }
-                                            if (item.kondisi.isNotEmpty() || !item.sumberDana.isNullOrEmpty()) {
+
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = item.namaBarang,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 15.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 Text(
-                                                    text = buildString {
-                                                        if (item.kondisi.isNotEmpty()) append("Kondisi: ${item.kondisi}")
-                                                        if (!item.sumberDana.isNullOrEmpty()) {
-                                                            if (isNotEmpty()) append(" | ")
-                                                            append("Dana: ${item.sumberDana}")
-                                                        }
-                                                    },
+                                                    text = "ID: ${item.idBarang}",
                                                     fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Normal,
-                                                    color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
-                                            }
-                                            if (item.keterangan.isNotEmpty()) {
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                Text(
-                                                    text = "Keterangan: ${item.keterangan}",
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Normal,
-                                                    color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray
-                                                )
+                                                if (item.merekAlat.isNotEmpty() || item.ruang.isNotEmpty()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = buildString {
+                                                            if (item.merekAlat.isNotEmpty()) append("Merek: ${item.merekAlat}")
+                                                            if (item.ruang.isNotEmpty()) {
+                                                                if (isNotEmpty()) append(" | ")
+                                                                append("Ruang: ${item.ruang}")
+                                                            }
+                                                        },
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Normal,
+                                                        color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray
+                                                    )
+                                                }
+                                                if (item.kondisi.isNotEmpty() || !item.sumberDana.isNullOrEmpty()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = buildString {
+                                                            if (item.kondisi.isNotEmpty()) append("Kondisi: ${item.kondisi}")
+                                                            if (!item.sumberDana.isNullOrEmpty()) {
+                                                                if (isNotEmpty()) append(" | ")
+                                                                append("Dana: ${item.sumberDana}")
+                                                            }
+                                                        },
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Normal,
+                                                        color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray
+                                                    )
+                                                }
+                                                if (item.keterangan.isNotEmpty()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "Keterangan: ${item.keterangan}",
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Normal,
+                                                        color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray
+                                                    )
+                                                }
                                             }
                                         }
 
@@ -792,6 +866,24 @@ fun AlatScreen(
                                                         imageVector = Icons.Default.Build,
                                                         contentDescription = "Pemeliharaan",
                                                         tint = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706),
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+
+                                                // Single Delete Button
+                                                IconButton(
+                                                    onClick = {
+                                                        selectedItemForDelete = item
+                                                        showDeleteConfirmDialog = true
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .testTag("delete_barang_${item.idBarang}")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = "Hapus Alat",
+                                                        tint = Color(0xFFDC2626),
                                                         modifier = Modifier.size(20.dp)
                                                     )
                                                 }
@@ -1896,7 +1988,7 @@ fun AlatScreen(
                     onDismissRequest = { showDeleteConfirmDialog = false },
                     title = { Text("Hapus Alat", fontWeight = FontWeight.Bold) },
                     text = {
-                        Text("Apakah Anda yakin ingin menghapus alat '${selectedItemForDelete!!.namaBarang}'? Tindakan ini tidak dapat dibatalkan.")
+                        Text("Apakah Anda yakin ingin menghapus alat '${selectedItemForDelete!!.namaBarang}' dari database lokal dan Firestore? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.")
                     },
                     confirmButton = {
                         Button(
@@ -1921,6 +2013,44 @@ fun AlatScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                            Text("Batal")
+                        }
+                    }
+                )
+            }
+
+            // Dialog Konfirmasi Hapus Massal (Batch Delete)
+            if (showBatchDeleteConfirmDialog && selectedItemIds.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = { showBatchDeleteConfirmDialog = false },
+                    title = { Text("Konfirmasi Hapus ${selectedItemIds.size} Data Alat", fontWeight = FontWeight.Bold) },
+                    text = {
+                        Text("Apakah Anda yakin ingin menghapus ${selectedItemIds.size} data alat terpilih secara permanen dari database lokal dan Firestore? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import) dan tindakan ini tidak dapat dibatalkan.")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val idsToDelete = selectedItemIds.toList()
+                                var deletedCount = 0
+                                idsToDelete.forEach { id ->
+                                    viewModel.deleteItem(
+                                        idBarang = id,
+                                        onSuccess = { deletedCount++ },
+                                        onError = {}
+                                    )
+                                }
+                                Toast.makeText(context, "Berhasil menghapus $deletedCount data alat!", Toast.LENGTH_SHORT).show()
+                                selectedItemIds = emptySet()
+                                showBatchDeleteConfirmDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_alat")
+                        ) {
+                            Text("Hapus Permanen")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showBatchDeleteConfirmDialog = false }) {
                             Text("Batal")
                         }
                     }

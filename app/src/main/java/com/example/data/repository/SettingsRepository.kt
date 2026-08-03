@@ -19,10 +19,24 @@ class SettingsRepository(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("gudang_settings", Context.MODE_PRIVATE)
 
     init {
-        // Clear old dummy data or empty data so default Merek Alat list is populated
+        val defaultBrands = listOf(
+            "BenQ", "Hitachi", "Epson", "Asus", "Acer", "Lenovo", "HP", "Samsung", "SanDisk", "Toshiba", "Seagate", "WD", "MSI"
+        )
         val currentMerekAlat = prefs.getString("merek_alat", null)
         if (currentMerekAlat == null || currentMerekAlat.isBlank() || currentMerekAlat == "Sony|#|Logitech|#|Canon|#|Epson|#|HP") {
-            prefs.edit().remove("merek_alat").apply()
+            saveList("merek_alat", defaultBrands)
+        } else {
+            val existing = currentMerekAlat.split("|#|").map { sanitizeItem(it) }.filter { it.isNotBlank() }.toMutableList()
+            var modified = false
+            for (brand in defaultBrands) {
+                if (existing.none { it.equals(brand, ignoreCase = true) }) {
+                    existing.add(brand)
+                    modified = true
+                }
+            }
+            if (modified) {
+                saveList("merek_alat", existing)
+            }
         }
         val currentMerekBahan = prefs.getString("merek_bahan", null)
         if (currentMerekBahan == "Sinar Dunia|#|PaperOne|#|Joyko|#|Kenko|#|Faber-Castell") {
@@ -36,9 +50,28 @@ class SettingsRepository(private val context: Context) {
         if (currentSumberDana == "BOS|#|Dana Komite|#|Bantuan Pemerintah|#|BOP") {
             prefs.edit().remove("sumber_dana").apply()
         }
+        val defaultKondisi = listOf(
+            "Normal / Baik",
+            "Expired / Afkir",
+            "Rusak",
+            "Pemeliharaan",
+            "Rusak Fisik"
+        )
         val currentKondisi = prefs.getString("kondisi", null)
-        if (currentKondisi == "Normal|#|Perbaikan|#|Rusak|#|Expired") {
-            prefs.edit().remove("kondisi").apply()
+        if (currentKondisi == null || currentKondisi.isBlank() || currentKondisi == "Normal|#|Perbaikan|#|Rusak|#|Expired" || currentKondisi == "Baik|#|Expired|#|Pemeliharaan|#|Rusak") {
+            saveList("kondisi", defaultKondisi)
+        } else {
+            val existing = currentKondisi.split("|#|").map { sanitizeItem(it) }.filter { it.isNotBlank() }.toMutableList()
+            var modified = false
+            for (item in defaultKondisi) {
+                if (existing.none { it.equals(item, ignoreCase = true) }) {
+                    existing.add(item)
+                    modified = true
+                }
+            }
+            if (modified) {
+                saveList("kondisi", existing)
+            }
         }
     }
 
@@ -180,11 +213,28 @@ class SettingsRepository(private val context: Context) {
     }
 
     fun getKondisi(): List<String> {
-        return getList("kondisi", emptyList()).sorted()
+        val defaults = listOf(
+            "Normal / Baik",
+            "Expired / Afkir",
+            "Rusak",
+            "Pemeliharaan",
+            "Rusak Fisik"
+        )
+        val list = getList("kondisi", defaults)
+        if (list.isEmpty()) return defaults
+        val result = list.toMutableList()
+        var modified = false
+        for (item in defaults) {
+            if (result.none { it.equals(item, ignoreCase = true) }) {
+                result.add(item)
+                modified = true
+            }
+        }
+        return if (modified) result else list
     }
 
     fun saveKondisi(list: List<String>) {
-        saveList("kondisi", list.sorted())
+        saveList("kondisi", list)
     }
 
     fun getTipeRam(): List<String> {

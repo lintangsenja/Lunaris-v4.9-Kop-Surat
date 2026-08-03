@@ -208,7 +208,10 @@ fun PantauAsetTab(
     val filteredDamagedAlat = remember(alatItems, selectedRoomFilter, selectedConditionFilter, selectedCategoryFilter, searchQuery) {
         alatItems.filter { item ->
             val matchesCondition = if (selectedConditionFilter == "Semua Kondisi") {
-                !item.kondisi.equals("Normal", ignoreCase = true) && item.kondisi.isNotBlank()
+                !item.kondisi.equals("Normal", ignoreCase = true) &&
+                !item.kondisi.equals("Baik", ignoreCase = true) &&
+                !item.kondisi.equals("Normal / Baik", ignoreCase = true) &&
+                item.kondisi.isNotBlank()
             } else {
                 item.kondisi.equals(selectedConditionFilter, ignoreCase = true)
             }
@@ -701,7 +704,7 @@ fun LaporKerusakanTab(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "Kondisi Saat Ini: ${selectedAlat!!.kondisi.ifBlank { "Normal" }}",
+                                text = "Kondisi Saat Ini: ${selectedAlat!!.kondisi.ifBlank { "Normal / Baik" }}",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isDark) MaterialTheme.colorScheme.primary else DeepPurpleText
@@ -756,43 +759,55 @@ fun LaporKerusakanTab(
                         color = textColor,
                         fontSize = 14.sp
                     )
-                    Row(
+                    val reportOptions = remember { listOf("Expired / Afkir", "Rusak", "Pemeliharaan", "Rusak Fisik") }
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf("Rusak", "Perbaikan").forEach { kondisiOption ->
-                            val isSelected = selectedKondisiBaru == kondisiOption
-                            val borderCol = if (isSelected) {
-                                if (isDark) MaterialTheme.colorScheme.primary else DeepPurpleText
-                            } else {
-                                if (isDark) MaterialTheme.colorScheme.outline else Color.Gray.copy(alpha = 0.4f)
-                            }
-                            val bgCol = if (isSelected) {
-                                if (isDark) MaterialTheme.colorScheme.primaryContainer else PastelLavender
-                            } else {
-                                Color.Transparent
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(bgCol)
-                                    .border(1.5.dp, borderCol, RoundedCornerShape(16.dp))
-                                    .clickable { selectedKondisiBaru = kondisiOption }
-                                    .testTag("btn_kondisibaru_$kondisiOption"),
-                                contentAlignment = Alignment.Center
+                        reportOptions.chunked(2).forEach { rowOptions ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    text = kondisiOption,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) {
-                                        if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else DeepPurpleText
+                                rowOptions.forEach { kondisiOption ->
+                                    val isSelected = selectedKondisiBaru == kondisiOption
+                                    val borderCol = if (isSelected) {
+                                        if (isDark) MaterialTheme.colorScheme.primary else DeepPurpleText
                                     } else {
-                                        if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.DarkGray
+                                        if (isDark) MaterialTheme.colorScheme.outline else Color.Gray.copy(alpha = 0.4f)
                                     }
-                                )
+                                    val bgCol = if (isSelected) {
+                                        if (isDark) MaterialTheme.colorScheme.primaryContainer else PastelLavender
+                                    } else {
+                                        Color.Transparent
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(bgCol)
+                                            .border(1.5.dp, borderCol, RoundedCornerShape(16.dp))
+                                            .clickable { selectedKondisiBaru = kondisiOption }
+                                            .testTag("btn_kondisibaru_$kondisiOption"),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = kondisiOption,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = if (isSelected) {
+                                                if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else DeepPurpleText
+                                            } else {
+                                                if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.DarkGray
+                                            }
+                                        )
+                                    }
+                                }
+                                if (rowOptions.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }

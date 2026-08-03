@@ -227,6 +227,9 @@ fun BahanScreen(
     var selectedItemForDelete by remember { mutableStateOf<ItemWithStock?>(null) }
     var selectedItemForDetail by remember { mutableStateOf<ItemWithStock?>(null) }
 
+    var selectedItemIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showBatchDeleteConfirmDialog by remember { mutableStateOf(false) }
+
     // Add Form State
     var showQuickAddType by remember { mutableStateOf<String?>(null) }
     var quickAddInputValue by remember { mutableStateOf("") }
@@ -244,7 +247,7 @@ fun BahanScreen(
     var merekBahanInput by remember { mutableStateOf("") }
     var ruangInput by remember { mutableStateOf("") }
     var sumberDanaInput by remember { mutableStateOf("Belum Diketahui / Kosongkan") }
-    var kondisiInput by remember { mutableStateOf("Normal") }
+    var kondisiInput by remember { mutableStateOf("Normal / Baik") }
     var keteranganInput by remember { mutableStateOf("") }
     var isBorrowableInput by remember { mutableStateOf(false) }
 
@@ -258,7 +261,7 @@ fun BahanScreen(
     var editMerekBahanInput by remember { mutableStateOf("") }
     var editRuangInput by remember { mutableStateOf("") }
     var editSumberDanaInput by remember { mutableStateOf("Belum Diketahui / Kosongkan") }
-    var editKondisiInput by remember { mutableStateOf("Normal") }
+    var editKondisiInput by remember { mutableStateOf("Normal / Baik") }
     var editKeteranganInput by remember { mutableStateOf("") }
     var editIsBorrowableInput by remember { mutableStateOf(selectedItemForEdit?.isBorrowable ?: false) }
 
@@ -273,7 +276,7 @@ fun BahanScreen(
                 editMerekBahanInput = item.merekAlat ?: ""
                 editRuangInput = item.ruang ?: ""
                 editSumberDanaInput = item.sumberDana ?: "Belum Diketahui / Kosongkan"
-                editKondisiInput = item.kondisi ?: "Normal"
+                editKondisiInput = item.kondisi ?: "Normal / Baik"
                 editKeteranganInput = item.keterangan ?: ""
                 editIsBorrowableInput = item.isBorrowable
             }
@@ -371,7 +374,7 @@ fun BahanScreen(
                         merekBahanInput = merekBahanList.firstOrNull() ?: ""
                         ruangInput = ruangList.firstOrNull() ?: ""
                         sumberDanaInput = "Belum Diketahui / Kosongkan"
-                        kondisiInput = kondisiList.firstOrNull() ?: "Normal"
+                        kondisiInput = kondisiList.firstOrNull() ?: "Normal / Baik"
                         nameInput = ""
                         initialStockInput = "1"
                         keteranganInput = ""
@@ -514,8 +517,8 @@ fun BahanScreen(
                                     "stok_awal", "sumber_dana", "kondisi", "keterangan"
                                 )
                                 val templateRows = listOf(
-                                    listOf("Kertas HVS A4 80g PaperOne", "Logistik", "PaperOne", "Ruang TU", "Rim", "100", "BOS Reguler", "Normal (Terawat)", "Kertas print laporan"),
-                                    listOf("Buku Tulis Sidu 38 Lembar", "Logistik", "Sinar Dunia", "Gudang Sarpras", "Pack", "100", "Bantuan Komite Sekolah", "Normal (Terawat)", "Buku bantuan siswa")
+                                    listOf("Kertas HVS A4 80g PaperOne", "Logistik", "PaperOne", "Ruang TU", "Rim", "100", "BOS Reguler", "Normal / Baik", "Kertas print laporan"),
+                                    listOf("Buku Tulis Sidu 38 Lembar", "Logistik", "Sinar Dunia", "Gudang Sarpras", "Pack", "100", "Bantuan Komite Sekolah", "Expired / Afkir", "Buku stok lama disisihkan")
                                 )
                                 val bytes = generateExcelBytes(
                                     title = "Template Impor Data Bahan Lunaris",
@@ -637,6 +640,53 @@ fun BahanScreen(
                         }
                     }
                 } else {
+                    // Multi-select header bar
+                    if (userRole == "admin" && filteredItems.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val isAllSelected = filteredItems.isNotEmpty() && selectedItemIds.size == filteredItems.size
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable {
+                                    selectedItemIds = if (isAllSelected) emptySet() else filteredItems.map { it.idBarang }.toSet()
+                                }
+                            ) {
+                                Checkbox(
+                                    checked = isAllSelected,
+                                    onCheckedChange = { checked ->
+                                        selectedItemIds = if (checked) filteredItems.map { it.idBarang }.toSet() else emptySet()
+                                    },
+                                    modifier = Modifier.testTag("checkbox_select_all_bahan")
+                                )
+                                Text(
+                                    text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${filteredItems.size})",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            if (selectedItemIds.isNotEmpty()) {
+                                Button(
+                                    onClick = { showBatchDeleteConfirmDialog = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.testTag("btn_hapus_terpilih_bahan")
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Hapus Terpilih (${selectedItemIds.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
                     LazyColumn(
                         state = lazyListState,
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -646,11 +696,15 @@ fun BahanScreen(
                             .weight(1f)
                     ) {
                         items(filteredItems, key = { it.idBarang }) { item ->
+                            val isSelected = selectedItemIds.contains(item.idBarang)
                             LunarisCard(
                                 shape = RoundedCornerShape(16.dp),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)),
-                                colors = CardDefaults.cardColors(containerColor = cardBgColor),
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) Color(0xFF7C3AED) else if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)
+                                ),
+                                colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFFF3E8FF) else cardBgColor),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
@@ -662,20 +716,40 @@ fun BahanScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = item.namaBarang,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 15.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "ID: ${item.idBarang}",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (userRole == "admin") {
+                                                Checkbox(
+                                                    checked = isSelected,
+                                                    onCheckedChange = { checked ->
+                                                        selectedItemIds = if (checked) {
+                                                            selectedItemIds + item.idBarang
+                                                        } else {
+                                                            selectedItemIds - item.idBarang
+                                                        }
+                                                    },
+                                                    modifier = Modifier.testTag("checkbox_bahan_${item.idBarang}")
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                            }
+
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = item.namaBarang,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 15.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "ID: ${item.idBarang}",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
 
                                         if (userRole == "admin") {
@@ -748,6 +822,24 @@ fun BahanScreen(
                                                         imageVector = Icons.Default.DeleteSweep,
                                                         contentDescription = "Diagnosa / Bahan Afkir",
                                                         tint = if (isDark) Color(0xFFF87171) else Color(0xFFDC2626),
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+
+                                                // Single Delete Button
+                                                IconButton(
+                                                    onClick = {
+                                                        selectedItemForDelete = item
+                                                        showDeleteConfirmDialog = true
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .testTag("delete_bahan_${item.idBarang}")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = "Hapus Bahan",
+                                                        tint = Color(0xFFDC2626),
                                                         modifier = Modifier.size(20.dp)
                                                     )
                                                 }
@@ -1763,7 +1855,7 @@ fun BahanScreen(
                     onDismissRequest = { showDeleteConfirmDialog = false },
                     title = { Text("Hapus Bahan", fontWeight = FontWeight.Bold) },
                     text = {
-                        Text("Apakah Anda yakin ingin menghapus bahan '${selectedItemForDelete!!.namaBarang}'? Tindakan ini tidak dapat dibatalkan.")
+                        Text("Apakah Anda yakin ingin menghapus bahan '${selectedItemForDelete!!.namaBarang}' dari database lokal dan Firestore? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.")
                     },
                     confirmButton = {
                         Button(
@@ -1788,6 +1880,44 @@ fun BahanScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                            Text("Batal")
+                        }
+                    }
+                )
+            }
+
+            // Dialog Konfirmasi Hapus Massal (Batch Delete)
+            if (showBatchDeleteConfirmDialog && selectedItemIds.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = { showBatchDeleteConfirmDialog = false },
+                    title = { Text("Konfirmasi Hapus ${selectedItemIds.size} Data Bahan", fontWeight = FontWeight.Bold) },
+                    text = {
+                        Text("Apakah Anda yakin ingin menghapus ${selectedItemIds.size} data bahan terpilih secara permanen dari database lokal dan Firestore? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import) dan tindakan ini tidak dapat dibatalkan.")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val idsToDelete = selectedItemIds.toList()
+                                var deletedCount = 0
+                                idsToDelete.forEach { id ->
+                                    viewModel.deleteItem(
+                                        idBarang = id,
+                                        onSuccess = { deletedCount++ },
+                                        onError = {}
+                                    )
+                                }
+                                Toast.makeText(context, "Berhasil menghapus $deletedCount data bahan!", Toast.LENGTH_SHORT).show()
+                                selectedItemIds = emptySet()
+                                showBatchDeleteConfirmDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_bahan")
+                        ) {
+                            Text("Hapus Permanen")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showBatchDeleteConfirmDialog = false }) {
                             Text("Batal")
                         }
                     }

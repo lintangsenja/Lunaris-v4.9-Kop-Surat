@@ -160,7 +160,7 @@ fun StokPeripheralScreen(
     }
 
     val masterKondisi = remember(kondisiList) {
-        if (kondisiList.isNotEmpty()) kondisiList else listOf("Baru", "Sangat Baik", "Baik (Siap Pakai)", "Layak Guna", "Cukup Baik")
+        if (kondisiList.isNotEmpty()) kondisiList else listOf("Normal / Baik", "Expired / Afkir", "Rusak", "Pemeliharaan", "Rusak Fisik")
     }
 
     val masterSatuan = remember(allUnits) {
@@ -196,6 +196,11 @@ fun StokPeripheralScreen(
     var itemForDetail by remember { mutableStateOf<PeripheralStockEntity?>(null) }
     var showCameraScannerDialog by remember { mutableStateOf(false) }
     var scannerCallback by remember { mutableStateOf<((String) -> Unit)?>(null) }
+
+    var selectedItemIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var showBatchDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showSingleDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var itemToDelete by remember { mutableStateOf<PeripheralStockEntity?>(null) }
 
     // FIFO Sorting & Filtering Logic
     val filteredStocks = remember(
@@ -450,10 +455,10 @@ fun StokPeripheralScreen(
                                 "satuan", "jumlah", "tanggal_masuk", "sumber_dana", "lokasi_ruang", "kondisi", "serial_number"
                             )
                             val templateRows = listOf(
-                                listOf("PRPH-001", "RAM", "RAM DDR4 16GB V-Gen Tsunami 3200MHz", "V-Gen", "DDR4 16GB PC25600", "Pcs", "10", "2026-01-15", "BOS Reguler", "Lab Komputer 1", "Baru", "SN-RAM16G-9021"),
-                                listOf("PRPH-002", "Storage / Media Penyimpanan", "SSD NVMe 512GB Samsung 980", "Samsung", "M.2 NVMe PCIe 3.0", "Pcs", "8", "2026-02-10", "BOS Kinerja", "Lab Server / NOC", "Sangat Baik", "SN-NVME512-8812"),
-                                listOf("PRPH-003", "Mouse & Keyboard", "Keyboard Mech RGB Outemu Blue", "Logitech", "Mechanical Wired USB", "Set", "15", "2026-03-01", "Bantuan Komite Sekolah", "Lab Komputer 2", "Baik (Siap Pakai)", "SN-KBMECH-3321"),
-                                listOf("PRPH-004", "UPS & PSU", "UPSICA 1200VA 600W LCD", "APC", "1200VA AVR Battery Backup", "Unit", "5", "2026-03-20", "Bantuan Pemda", "Lab Server / NOC", "Baru", "SN-UPS1200-5541")
+                                listOf("PRPH-001", "RAM", "RAM DDR4 16GB V-Gen Tsunami 3200MHz", "V-Gen", "DDR4 16GB PC25600", "Pcs", "10", "2026-01-15", "BOS Reguler", "Lab Komputer 1", "Normal / Baik", "SN-RAM16G-9021"),
+                                listOf("PRPH-002", "Storage / Media Penyimpanan", "SSD NVMe 512GB Samsung 980", "Samsung", "M.2 NVMe PCIe 3.0", "Pcs", "8", "2026-02-10", "BOS Kinerja", "Lab Server / NOC", "Normal / Baik", "SN-NVME512-8812"),
+                                listOf("PRPH-003", "Mouse & Keyboard", "Keyboard Mech RGB Outemu Blue", "Logitech", "Mechanical Wired USB", "Set", "15", "2026-03-01", "Bantuan Komite Sekolah", "Lab Komputer 2", "Pemeliharaan", "SN-KBMECH-3321"),
+                                listOf("PRPH-004", "UPS & PSU", "UPSICA 1200VA 600W LCD", "APC", "1200VA AVR Battery Backup", "Unit", "5", "2026-03-20", "Bantuan Pemda", "Lab Server / NOC", "Rusak Fisik", "SN-UPS1200-5541")
                             )
                             val bytes = generateExcelBytes(
                                 title = "Template Impor Data Peripheral Lunaris",
@@ -740,17 +745,73 @@ fun StokPeripheralScreen(
                         }
                     }
                 } else {
+                    // Multi-select header bar
+                    if (canLabKomManage && filteredStocks.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val isAllSelected = filteredStocks.isNotEmpty() && selectedItemIds.size == filteredStocks.size
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable {
+                                    selectedItemIds = if (isAllSelected) emptySet() else filteredStocks.map { it.id }.toSet()
+                                }
+                            ) {
+                                Checkbox(
+                                    checked = isAllSelected,
+                                    onCheckedChange = { checked ->
+                                        selectedItemIds = if (checked) filteredStocks.map { it.id }.toSet() else emptySet()
+                                    },
+                                    modifier = Modifier.testTag("checkbox_select_all_peripheral")
+                                )
+                                Text(
+                                    text = if (isAllSelected) "Batal Pilih Semua" else "Pilih Semua (${filteredStocks.size})",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            if (selectedItemIds.isNotEmpty()) {
+                                Button(
+                                    onClick = { showBatchDeleteConfirmDialog = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.testTag("btn_hapus_terpilih_peripheral")
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Hapus Terpilih (${selectedItemIds.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         items(filteredStocks, key = { it.id }) { stock ->
+                            val isSelected = selectedItemIds.contains(stock.id)
                             PeripheralStockCardItem(
                                 item = stock,
+                                isSelected = isSelected,
+                                onSelectChange = if (canLabKomManage) { { checked ->
+                                    selectedItemIds = if (checked) selectedItemIds + stock.id else selectedItemIds - stock.id
+                                } } else null,
                                 onUse = { itemToUse = stock },
                                 onEdit = { itemToEdit = stock },
                                 onLaporRusak = { itemToLaporRusak = stock },
+                                onDelete = if (canLabKomManage) { {
+                                    itemToDelete = stock
+                                    showSingleDeleteConfirmDialog = true
+                                } } else null,
                                 onDetail = { itemForDetail = stock }
                             )
                         }
@@ -1083,6 +1144,90 @@ fun StokPeripheralScreen(
             }
         )
     }
+
+    // Dialog Konfirmasi Hapus Single Peripheral
+    if (showSingleDeleteConfirmDialog && itemToDelete != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showSingleDeleteConfirmDialog = false
+                itemToDelete = null
+            },
+            title = { Text("Hapus Stok Peripheral", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus peripheral '${itemToDelete!!.namaItem}' (ID: ${itemToDelete!!.idBarang}) secara permanen dari database lokal dan Firestore? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val currentItem = itemToDelete!!
+                        viewModel.deletePeripheralStock(
+                            id = currentItem.id,
+                            onSuccess = {
+                                Toast.makeText(context, "Stok peripheral berhasil dihapus!", Toast.LENGTH_SHORT).show()
+                                showSingleDeleteConfirmDialog = false
+                                itemToDelete = null
+                            },
+                            onError = { err ->
+                                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                showSingleDeleteConfirmDialog = false
+                                itemToDelete = null
+                            }
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("dialog_btn_confirm_delete_peripheral")
+                ) {
+                    Text("Hapus")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showSingleDeleteConfirmDialog = false
+                    itemToDelete = null
+                }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Dialog Konfirmasi Hapus Massal (Batch Delete Peripheral)
+    if (showBatchDeleteConfirmDialog && selectedItemIds.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteConfirmDialog = false },
+            title = { Text("Konfirmasi Hapus ${selectedItemIds.size} Data Peripheral", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus ${selectedItemIds.size} data peripheral terpilih secara permanen dari database lokal dan Firestore? Fitur ini diperuntukkan khusus bagi koreksi data input yang keliru (bulk import) dan tindakan ini tidak dapat dibatalkan.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val idsToDelete = selectedItemIds.toList()
+                        var deletedCount = 0
+                        idsToDelete.forEach { id ->
+                            viewModel.deletePeripheralStock(
+                                id = id,
+                                onSuccess = { deletedCount++ },
+                                onError = {}
+                            )
+                        }
+                        Toast.makeText(context, "Berhasil menghapus $deletedCount data peripheral!", Toast.LENGTH_SHORT).show()
+                        selectedItemIds = emptySet()
+                        showBatchDeleteConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("dialog_btn_confirm_batch_delete_peripheral")
+                ) {
+                    Text("Hapus Permanen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteConfirmDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 // PERIPHERAL CARD ITEM COMPOSABLE
@@ -1092,6 +1237,9 @@ private fun PeripheralStockCardItem(
     onUse: () -> Unit,
     onEdit: () -> Unit,
     onLaporRusak: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+    isSelected: Boolean = false,
+    onSelectChange: ((Boolean) -> Unit)? = null,
     onDetail: () -> Unit = {}
 ) {
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -1104,8 +1252,11 @@ private fun PeripheralStockCardItem(
             .padding(vertical = 4.dp)
             .clickable { onDetail() },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)),
-        border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)),
+        colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFFF3E8FF) else if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)),
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) Color(0xFF7C3AED) else if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.4f) else Color(0xFFCBD5E1)
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -1114,7 +1265,18 @@ private fun PeripheralStockCardItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (onSelectChange != null) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = onSelectChange,
+                            modifier = Modifier.testTag("checkbox_peripheral_${item.id}")
+                        )
+                    }
+
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(6.dp)
@@ -1268,9 +1430,26 @@ private fun PeripheralStockCardItem(
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = "Lapor Kerusakan Peripheral",
-                            tint = Color(0xFFDC2626),
+                            tint = Color(0xFFD97706),
                             modifier = Modifier.size(20.dp)
                         )
+                    }
+
+                    // d. Hapus Data Peripheral - Pure Icon Button
+                    if (onDelete != null) {
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("btn_hapus_peripheral_${item.idBarang}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Hapus Stok Peripheral",
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }

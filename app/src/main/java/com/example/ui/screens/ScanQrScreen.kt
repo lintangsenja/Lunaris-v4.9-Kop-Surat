@@ -2495,7 +2495,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
         if (sumberDanaList.isNotEmpty()) sumberDanaList else listOf("BOS Reguler", "BOS Kinerja", "Komite Sekolah", "Bantuan Hibah / CSR", "Yayasan / Mandiri")
     }
     val masterKondisi = remember(kondisiList) {
-        if (kondisiList.isNotEmpty()) kondisiList else listOf("Baru", "Sangat Baik", "Baik (Siap Pakai)", "Layak Guna", "Cukup Baik")
+        if (kondisiList.isNotEmpty()) kondisiList else listOf("Normal / Baik", "Expired / Afkir", "Rusak", "Pemeliharaan", "Rusak Fisik")
     }
     val masterMerek = remember(merekAlatList) {
         if (merekAlatList.isNotEmpty()) merekAlatList else listOf("Kingston", "Corsair", "Samsung", "Asus", "Gigabyte", "Logitech", "Epson", "Mikrotik")
@@ -2537,7 +2537,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
     var manualMerek by remember { mutableStateOf("") }
     var manualRuang by remember(masterRuang) { mutableStateOf(masterRuang.firstOrNull() ?: "Lab Komputer 1") }
     var manualSumberDana by remember(masterSumberDana) { mutableStateOf(masterSumberDana.firstOrNull() ?: "BOS Reguler") }
-    var manualKondisi by remember(masterKondisi) { mutableStateOf(masterKondisi.firstOrNull() ?: "Baru") }
+    var manualKondisi by remember(masterKondisi) { mutableStateOf(masterKondisi.firstOrNull() ?: "Normal / Baik") }
     var manualStok by remember { mutableStateOf("1") }
     var manualKeterangan by remember { mutableStateOf("") }
     var manualBorrowable by remember { mutableStateOf(false) }
@@ -3822,7 +3822,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
                                 merekAlat = manualMerek.trim(),
                                 ruang = manualRuang.trim().ifEmpty { "Lab Komputer 1" },
                                 sumberDana = manualSumberDana.trim().ifEmpty { "BOS Reguler" },
-                                kondisi = manualKondisi.trim().ifEmpty { "Baik" },
+                                kondisi = manualKondisi.trim().ifEmpty { "Normal / Baik" },
                                 keterangan = fullSpec,
                                 isBorrowable = false,
                                 useAutoId = manualLabKomIsAutoId,
@@ -3893,7 +3893,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
                                 merekAlat = manualMerek.trim(),
                                 ruang = manualRuang.trim(),
                                 sumberDana = manualSumberDana.trim(),
-                                kondisi = manualKondisi.trim().ifEmpty { "Baik" },
+                                kondisi = manualKondisi.trim().ifEmpty { "Normal / Baik" },
                                 keterangan = manualKeterangan.trim(),
                                 isBorrowable = false,
                                 useAutoId = manualBahanIsAutoId,
@@ -3929,7 +3929,7 @@ fun InputManualTab(viewModel: InventoryViewModel) {
                                 merekAlat = manualMerek.trim(),
                                 ruang = manualRuang.trim(),
                                 sumberDana = manualSumberDana.trim(),
-                                kondisi = manualKondisi.trim().ifEmpty { "Baik" },
+                                kondisi = manualKondisi.trim().ifEmpty { "Normal / Baik" },
                                 keterangan = manualKeterangan.trim(),
                                 isBorrowable = manualBorrowable,
                                 useAutoId = manualAlatIsAutoId,

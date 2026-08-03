@@ -95,13 +95,7 @@ fun BahanAfkirScreen(
     val defaultOfficerState by viewModel.defaultOfficer.collectAsState()
     val defaultOfficer = defaultOfficerState.ifBlank { "Administrator" }
     val kondisiList by viewModel.kondisi.collectAsState()
-    val alasanOptions = remember(kondisiList) {
-        if (kondisiList.isNotEmpty()) {
-            kondisiList
-        } else {
-            listOf("Kedaluwarsa", "Rusak Fisik", "Hilang", "Afkir")
-        }
-    }
+    val alasanOptions = remember(kondisiList) { kondisiList }
 
     var showQrScanner by remember { mutableStateOf(false) }
 
@@ -138,7 +132,7 @@ fun BahanAfkirScreen(
 
     LaunchedEffect(alasanOptions) {
         if (selectedReason.isBlank() || !alasanOptions.contains(selectedReason)) {
-            selectedReason = alasanOptions.firstOrNull() ?: "Kedaluwarsa"
+            selectedReason = alasanOptions.firstOrNull() ?: ""
         }
     }
 
@@ -915,7 +909,7 @@ fun BahanAfkirScreen(
                             filterGroups = listOf(
                                 FilterGroup(
                                     title = "Alasan Afkir",
-                                    options = listOf("Semua", "Kadaluarsa", "Rusak", "Menguap", "Lainnya"),
+                                    options = listOf("Semua") + alasanOptions.distinct(),
                                     selectedOption = tempReasonFilter,
                                     onOptionSelected = { tempReasonFilter = it }
                                 ),
