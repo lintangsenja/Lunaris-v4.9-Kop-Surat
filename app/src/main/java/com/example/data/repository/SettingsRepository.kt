@@ -19,9 +19,9 @@ class SettingsRepository(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("gudang_settings", Context.MODE_PRIVATE)
 
     init {
-        // Clear old dummy data if found, so fallback is empty list as requested
+        // Clear old dummy data or empty data so default Merek Alat list is populated
         val currentMerekAlat = prefs.getString("merek_alat", null)
-        if (currentMerekAlat == "Sony|#|Logitech|#|Canon|#|Epson|#|HP") {
+        if (currentMerekAlat == null || currentMerekAlat.isBlank() || currentMerekAlat == "Sony|#|Logitech|#|Canon|#|Epson|#|HP") {
             prefs.edit().remove("merek_alat").apply()
         }
         val currentMerekBahan = prefs.getString("merek_bahan", null)
@@ -145,7 +145,10 @@ class SettingsRepository(private val context: Context) {
     }
 
     fun getMerekAlat(): List<String> {
-        return getList("merek_alat", emptyList()).sorted()
+        val defaults = listOf(
+            "BenQ", "Hitachi", "Epson", "Asus", "Acer", "Lenovo", "HP", "Samsung", "SanDisk", "Toshiba", "Seagate", "WD", "MSI"
+        )
+        return getList("merek_alat", defaults).sorted()
     }
 
     fun saveMerekAlat(list: List<String>) {
