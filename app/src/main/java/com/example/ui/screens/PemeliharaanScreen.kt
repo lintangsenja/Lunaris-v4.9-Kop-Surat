@@ -89,11 +89,19 @@ fun PemeliharaanScreen(
     }
     val rawHistoryList by viewModel.allDamagedItems.collectAsState()
     val servisLuarList by viewModel.servisLuarItems.collectAsState()
-    // Filter history specifically for internal maintenance items
+    // Filter history for all active maintenance items (internal and external service)
     val historyList = remember(rawHistoryList) {
-        rawHistoryList.filter {
-            (it.status.equals("Pemeliharaan", ignoreCase = true) || it.status.equals("Servis Luar/Pemeliharaan", ignoreCase = true)) &&
-            !it.status.contains("Servis Luar", ignoreCase = true)
+        rawHistoryList.filter { item ->
+            val isMaint = item.status.contains("Pemeliharaan", ignoreCase = true) || 
+                          item.status.contains("Servis", ignoreCase = true) || 
+                          item.kondisiBaru.contains("Pemeliharaan", ignoreCase = true) || 
+                          item.kondisiBaru.contains("Servis", ignoreCase = true) || 
+                          item.kondisiBaru.contains("Perbaikan", ignoreCase = true)
+            val isBroken = item.status.contains("Rusak", ignoreCase = true)
+            val notDone = !item.status.contains("Normal", ignoreCase = true) && 
+                          !item.status.contains("Selesai", ignoreCase = true) && 
+                          !item.status.contains("Dihibahkan", ignoreCase = true)
+            isMaint && !isBroken && notDone
         }
     }
     val defaultOfficerState by viewModel.defaultOfficer.collectAsState()
@@ -211,19 +219,21 @@ fun PemeliharaanScreen(
     }
 
     // Form validation
-    val stokTersedia = selectedAlat?.stokTersedia ?: 0
-    val maxAllowedStock = remember(selectedAlat) {
-        selectedAlat?.let { maxOf(it.stokTersedia, it.stokAwal, 1) } ?: 1
+    val targetItem = selectedAlat ?: (if (selectedPc != null) allItems.find { it.idBarang.trim().equals(selectedPc?.id?.trim(), ignoreCase = true) } else null)
+    val isSelectedValid = selectedAlat != null || selectedPc != null
+    val currentAvailableStock = targetItem?.stokTersedia ?: (selectedPc?.qty ?: 0)
+    val maxAllowedStock = remember(targetItem, selectedPc) {
+        targetItem?.let { maxOf(it.stokTersedia, it.stokAwal, 1) } ?: (selectedPc?.qty?.coerceAtLeast(1) ?: 1)
     }
     val jumlahPemeliharaan = jumlahPemeliharaanInput.toIntOrNull() ?: 0
-    val isJumlahInvalid = remember(jumlahPemeliharaanInput, selectedAlat, maxAllowedStock) {
+    val isJumlahInvalid = remember(jumlahPemeliharaanInput, isSelectedValid, maxAllowedStock) {
         if (jumlahPemeliharaanInput.isEmpty()) false
         else {
-            jumlahPemeliharaan <= 0 || (selectedAlat != null && jumlahPemeliharaan > maxAllowedStock)
+            jumlahPemeliharaan <= 0 || (isSelectedValid && jumlahPemeliharaan > maxAllowedStock)
         }
     }
 
-    val canSubmit = selectedAlat != null &&
+    val canSubmit = isSelectedValid &&
             jumlahPemeliharaan > 0 &&
             jumlahPemeliharaan <= maxAllowedStock &&
             !isJumlahInvalid &&
@@ -1003,7 +1013,7 @@ fun PemeliharaanScreen(
                                                 supportingText = {
                                                     if (isJumlahInvalid) {
                                                         Text(
-                                                            "Jumlah harus > 0 dan tidak boleh melebihi stok tersedia ($stokTersedia)!",
+                                                            "Jumlah harus > 0 dan tidak boleh melebihi stok tersedia ($currentAvailableStock)!",
                                                             color = MaterialTheme.colorScheme.error,
                                                             fontSize = 11.sp
                                                         )
@@ -1174,13 +1184,14 @@ fun PemeliharaanScreen(
                                     // Submit Button
                                     Button(
                                         onClick = {
-                                            val tool = selectedAlat!!
+                                            val itemId = selectedAlat?.idBarang ?: selectedPc?.id ?: ""
+                                            val itemName = selectedAlat?.namaBarang ?: selectedPc?.name ?: ""
                                             val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
                                             val currentTime = timeFormat.format(Date())
 
                                             viewModel.recordDamagedReport(
-                                                idBarang = tool.idBarang,
-                                                namaBarang = tool.namaBarang,
+                                                idBarang = itemId,
+                                                namaBarang = itemName,
                                                 jumlah = jumlahPemeliharaan,
                                                 tanggalKerusakan = selectedDate,
                                                 waktuKerusakan = currentTime,
@@ -1192,13 +1203,14 @@ fun PemeliharaanScreen(
                                                     Toast.makeText(context, "Aset berhasil dikirim ke ${if (tipePemeliharaanInput == "Servis Luar") "Servis Luar" else "Pemeliharaan"}!", Toast.LENGTH_LONG).show()
                                                     // Reset Form
                                                     selectedAlat = null
+                                                    selectedPc = null
                                                     alatSearchQuery = ""
                                                     jumlahPemeliharaanInput = ""
                                                     serialNumberInput = ""
                                                     catatanInput = ""
                                                     petugasInput = defaultOfficer
-                                                    // Move to History Tab
-                                                    selectedTabState = if (tipePemeliharaanInput == "Servis Luar") 2 else 1
+                                                    // Move to List Pemeliharaan Tab (Tab 1)
+                                                    selectedTabState = 1
                                                 },
                                                 onError = { err ->
                                                     Toast.makeText(context, err, Toast.LENGTH_LONG).show()
@@ -1344,10 +1356,10 @@ fun PemeliharaanScreen(
 
                                                     // Status Indicator Text-only
                                                     Text(
-                                                        text = "Pemeliharaan",
+                                                        text = if (item.status.contains("Servis Luar", ignoreCase = true)) "Servis Luar" else "Pemeliharaan",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.ExtraBold,
-                                                        color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF2563EB)
+                                                        color = if (item.status.contains("Servis Luar", ignoreCase = true)) (if (isDark) Color(0xFFF59E0B) else Color(0xFFD97706)) else (if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF2563EB))
                                                     )
                                                 }
 

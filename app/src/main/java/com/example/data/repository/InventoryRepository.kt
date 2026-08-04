@@ -881,8 +881,15 @@ class InventoryRepository(
     }
 
     suspend fun recordDamagedReport(damaged: DamagedItemEntity) {
-        val docId = damaged.id.toString().ifBlank { "${damaged.idBarang}_${System.currentTimeMillis()}" }
-        firestore.collection(PATH_DAMAGED_ITEMS).document(docId).set(damaged, SetOptions.merge()).await()
+        val uniqueId = if (damaged.id > 0) damaged.id else (System.currentTimeMillis() % 1000000000).toInt()
+        val finalEntity = damaged.copy(id = uniqueId)
+        val docId = finalEntity.id.toString()
+        firestore.collection(PATH_DAMAGED_ITEMS).document(docId).set(finalEntity, SetOptions.merge()).await()
+        try {
+            inventoryDao?.insertDamagedItem(finalEntity)
+        } catch (e: Exception) {
+            Log.e("InventoryRepo", "Error inserting damaged item into DAO", e)
+        }
     }
 
     suspend fun recordHibahDamagedItem(
@@ -912,20 +919,45 @@ class InventoryRepository(
             "waktuTindakan" to currentTime
         )
         firestore.collection(PATH_DAMAGED_ITEMS).document(id.toString()).set(updateMap, SetOptions.merge()).await()
+        try {
+            inventoryDao?.recordHibahDamagedItem(id, finalPenerima, finalAlasan)
+        } catch (e: Exception) {
+            Log.e("InventoryRepo", "Error recording hibah in DAO", e)
+        }
     }
 
     suspend fun cancelDamagedReport(id: Int) {
         firestore.collection(PATH_DAMAGED_ITEMS).document(id.toString()).delete().await()
+        try {
+            inventoryDao?.deleteDamagedItemById(id)
+        } catch (e: Exception) {
+            Log.e("InventoryRepo", "Error deleting damaged item from DAO", e)
+        }
     }
 
     suspend fun validateDamagedItem(id: Int, date: String, officer: String, notes: String) {
+        val docRef = firestore.collection(PATH_DAMAGED_ITEMS).document(id.toString())
+        val snapshot = try { docRef.get().await() } catch (e: Exception) { null }
+        val currentCount = snapshot?.getLong("validationCount")?.toInt() ?: 0
+        val newCount = currentCount + 1
+        val existingNotes = snapshot?.getString("validationNotes") ?: ""
+        val updatedNotes = if (existingNotes.isBlank()) "Validasi $newCount: $notes ($officer, $date)" else "$existingNotes\nValidasi $newCount: $notes ($officer, $date)"
+
         val updateMap = mapOf(
-            "status" to "Tervalidasi",
-            "tanggalTindakan" to date,
+            "validationCount" to newCount,
+            "lastValidatedDate" to date,
+            "lastValidatedBy" to officer,
+            "validationNotes" to updatedNotes,
             "petugasTindakan" to officer,
+            "tanggalTindakan" to date,
             "catatanTindakan" to notes
         )
-        firestore.collection(PATH_DAMAGED_ITEMS).document(id.toString()).set(updateMap, SetOptions.merge()).await()
+        docRef.set(updateMap, SetOptions.merge()).await()
+        try {
+            inventoryDao?.validateDamagedItem(id, date, officer, updatedNotes)
+        } catch (e: Exception) {
+            Log.e("InventoryRepo", "Error validating damaged item in DAO", e)
+        }
     }
 
     suspend fun updateDamagedStatus(
@@ -936,13 +968,26 @@ class InventoryRepository(
         currentDate: String,
         currentTime: String
     ) {
+        val isMaint = newStatus.contains("Pemeliharaan", ignoreCase = true) || newStatus.contains("Servis", ignoreCase = true)
+        val isBroken = newStatus.contains("Rusak", ignoreCase = true)
+        val isNormal = newStatus.contains("Normal", ignoreCase = true) || newStatus.contains("Tersedia", ignoreCase = true)
+
+        val newKondisiBaru = if (isMaint) "Pemeliharaan" else if (isBroken) "Rusak" else if (isNormal) "Normal" else newStatus
+
         val updateMap = mapOf(
             "status" to newStatus,
+            "kondisiBaru" to newKondisiBaru,
             "alasanHibah" to alasan,
+            "statusKeterangan" to alasan,
             "petugasTindakan" to namaPetugas,
             "tanggalTindakan" to currentDate
         )
         firestore.collection(PATH_DAMAGED_ITEMS).document(damagedId.toString()).set(updateMap, SetOptions.merge()).await()
+        try {
+            inventoryDao?.updateDamagedStatus(damagedId, newStatus, alasan, namaPetugas, currentDate, currentTime)
+        } catch (e: Exception) {
+            Log.e("InventoryRepo", "Error updating damaged status in DAO", e)
+        }
     }
 
     suspend fun deleteDamagedItemPermanently(

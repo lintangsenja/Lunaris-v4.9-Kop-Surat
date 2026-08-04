@@ -36,6 +36,19 @@ import com.example.ui.components.LunarisTextField
 import com.example.ui.theme.DeepPurpleText
 import com.example.ui.viewmodel.InventoryViewModel
 
+data class HibahItemDisplay(
+    val id: String,
+    val idBarang: String,
+    val namaBarang: String,
+    val kategori: String,
+    val jumlah: Int,
+    val satuan: String,
+    val penerimaHibah: String,
+    val alasanHibah: String,
+    val tanggalHibah: String,
+    val petugas: String
+)
+
 private fun cleanCategoryText(rawCategory: String): String {
     if (rawCategory.isBlank()) return "Peripheral"
     val cleaned = rawCategory
@@ -57,8 +70,10 @@ fun HapusAsetScreen(
     val allBahanAfkir by viewModel.allBahanAfkir.collectAsState()
     val hapusAsetPeripheralItems by viewModel.hapusAsetPeripheralItems.collectAsState()
     val defaultOfficer by viewModel.defaultOfficer.collectAsState()
+    val allItemsWithStock by viewModel.itemsWithStock.collectAsState()
 
-    var selectedTabState by remember { mutableIntStateOf(0) } // 0 = Alat, 1 = Bahan, 2 = Peripheral
+    var selectedTabState by remember { mutableIntStateOf(0) } // 0 = Alat, 1 = Bahan, 2 = Peripheral, 3 = List Hibah
+    var selectedHibahDetail by remember { mutableStateOf<HibahItemDisplay?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var showQrScanner by remember { mutableStateOf(false) }
 
@@ -134,6 +149,85 @@ fun HapusAsetScreen(
                 it.idBarang.contains(searchQuery, ignoreCase = true) ||
                 it.subKategori.contains(searchQuery, ignoreCase = true) ||
                 it.keteranganKerusakan.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    val filteredHibah = remember(allDamagedItems, hapusAsetPeripheralItems, allBahanAfkir, allItemsWithStock, searchQuery, defaultOfficer) {
+        val list = mutableListOf<HibahItemDisplay>()
+
+        allDamagedItems.filter {
+            it.isHibah || it.status.equals("Dihibahkan", ignoreCase = true) || it.status.contains("Hibah", ignoreCase = true)
+        }.forEach { damaged ->
+            val mainItem = allItemsWithStock.find { it.idBarang == damaged.idBarang }
+            val cat = when {
+                mainItem?.type == "PC" || mainItem?.kategori.equals("Lab Komputer", ignoreCase = true) || mainItem?.kategori.equals("Komputer", ignoreCase = true) -> "PC / LabKom"
+                mainItem?.type == "PERIPHERAL" || mainItem?.kategori.equals("Peripheral", ignoreCase = true) -> "Peripheral"
+                else -> "Alat"
+            }
+            list.add(
+                HibahItemDisplay(
+                    id = "damaged_${damaged.id}",
+                    idBarang = damaged.idBarang,
+                    namaBarang = damaged.namaBarang,
+                    kategori = cat,
+                    jumlah = damaged.jumlah,
+                    satuan = mainItem?.satuan ?: "Unit",
+                    penerimaHibah = damaged.penerimaHibah.ifBlank { "Instansi Pihak Luar" },
+                    alasanHibah = damaged.alasanHibah.ifBlank { damaged.keteranganKerusakan.ifBlank { "Hibah Aset" } },
+                    tanggalHibah = damaged.lastValidatedDate.ifBlank { damaged.tanggalKerusakan },
+                    petugas = damaged.lastValidatedBy.ifBlank { damaged.namaPetugas.ifBlank { defaultOfficer } }
+                )
+            )
+        }
+
+        hapusAsetPeripheralItems.filter {
+            it.isHibah || it.status.equals("Dihibahkan", ignoreCase = true) || it.status.contains("Hibah", ignoreCase = true)
+        }.forEach { periph ->
+            list.add(
+                HibahItemDisplay(
+                    id = "periph_${periph.id}",
+                    idBarang = periph.idBarang,
+                    namaBarang = periph.namaBarang,
+                    kategori = "Peripheral (${cleanCategoryText(periph.subKategori)})",
+                    jumlah = periph.jumlah,
+                    satuan = "Unit",
+                    penerimaHibah = periph.penerimaHibah.ifBlank { "Instansi Pihak Luar" },
+                    alasanHibah = periph.alasanHibah.ifBlank { periph.keteranganKerusakan.ifBlank { "Hibah Periferal" } },
+                    tanggalHibah = periph.tanggalKerusakan,
+                    petugas = periph.namaPetugas.ifBlank { defaultOfficer }
+                )
+            )
+        }
+
+        allBahanAfkir.filter {
+            it.status.equals("Hibah", ignoreCase = true) || it.status.equals("Dihibahkan", ignoreCase = true)
+        }.forEach { bahan ->
+            list.add(
+                HibahItemDisplay(
+                    id = "bahan_${bahan.idAfkir}",
+                    idBarang = bahan.idAfkir,
+                    namaBarang = bahan.namaBarang,
+                    kategori = "Bahan",
+                    jumlah = bahan.jumlahAfkir,
+                    satuan = bahan.satuan.ifBlank { "Satuan" },
+                    penerimaHibah = "Instansi / Pihak Luar",
+                    alasanHibah = bahan.alasan.ifBlank { "Hibah Bahan Afkir" },
+                    tanggalHibah = bahan.tanggalAfkir,
+                    petugas = defaultOfficer.ifBlank { "Administrator" }
+                )
+            )
+        }
+
+        if (searchQuery.isBlank()) {
+            list
+        } else {
+            list.filter {
+                it.namaBarang.contains(searchQuery, ignoreCase = true) ||
+                it.idBarang.contains(searchQuery, ignoreCase = true) ||
+                it.penerimaHibah.contains(searchQuery, ignoreCase = true) ||
+                it.alasanHibah.contains(searchQuery, ignoreCase = true) ||
+                it.kategori.contains(searchQuery, ignoreCase = true)
             }
         }
     }
@@ -286,6 +380,29 @@ fun HapusAsetScreen(
                                 }
                             },
                             modifier = Modifier.testTag("tab_hapus_peripheral")
+                        )
+
+                        Tab(
+                            selected = selectedTabState == 3,
+                            onClick = { selectedTabState = 3 },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.CardGiftcard,
+                                        contentDescription = null,
+                                        tint = if (selectedTabState == 3) Color(0xFF8B5CF6) else unselectedTabColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "List Hibah (${filteredHibah.size})",
+                                        fontWeight = if (selectedTabState == 3) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (selectedTabState == 3) Color(0xFF8B5CF6) else unselectedTabColor,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            },
+                            modifier = Modifier.testTag("tab_hapus_hibah")
                         )
                     }
                 }
@@ -556,7 +673,7 @@ fun HapusAsetScreen(
                         }
                     }
                 }
-            } else {
+            } else if (selectedTabState == 2) {
                 // TAB PERIPHERAL
                 if (filteredPeripheral.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -658,6 +775,89 @@ fun HapusAsetScreen(
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // TAB LIST HIBAH
+                if (filteredHibah.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(48.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Belum ada data aset yang dihibahkan.", color = Color.Gray, fontWeight = FontWeight.Medium)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Aset yang dihibahkan melalui tombol Hibah akan tercatat di sini.", color = Color.Gray.copy(alpha = 0.7f), fontSize = 12.sp)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
+                        items(filteredHibah, key = { it.id }) { item ->
+                            LunarisCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedHibahDetail = item }
+                                    .testTag("card_hibah_${item.id}")
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = item.namaBarang,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Surface(
+                                            color = Color(0xFFF3E8FF),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = item.kategori,
+                                                color = Color(0xFF7E22CE),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text("ID Aset: ${item.idBarang} | Jumlah: ${item.jumlah} ${item.satuan}", fontSize = 13.sp, color = Color.Gray)
+                                    
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Business, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Penerima / Instansi: ", fontSize = 13.sp, color = Color.Gray)
+                                        Text(item.penerimaHibah, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7E22CE))
+                                    }
+
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Tanggal: ${item.tanggalHibah}", fontSize = 12.sp, color = Color.Gray)
+                                        TextButton(
+                                            onClick = { selectedHibahDetail = item },
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) {
+                                            Text("Lihat Detail Hibah", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8B5CF6))
+                                            Spacer(Modifier.width(4.dp))
+                                            Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF8B5CF6))
                                         }
                                     }
                                 }
@@ -1301,6 +1501,112 @@ fun HapusAsetScreen(
                         border = BorderStroke(1.dp, Color(0xFFCBD5E1))
                     ) {
                         Text("Batal", color = Color(0xFF475569))
+                    }
+                }
+            )
+        }
+        // 5. DETAIL HIBAH POPUP DIALOG
+        if (selectedHibahDetail != null) {
+            val detail = selectedHibahDetail!!
+            AlertDialog(
+                onDismissRequest = { selectedHibahDetail = null },
+                containerColor = Color.White,
+                shape = RoundedCornerShape(16.dp),
+                icon = {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .background(Color(0xFFF3E8FF), shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CardGiftcard,
+                            contentDescription = null,
+                            tint = Color(0xFF7E22CE),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                },
+                title = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Detail Informasi Hibah Aset", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF0F172A))
+                        Text(detail.namaBarang, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = Color(0xFF7E22CE))
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                    Text("ID Aset / Barang:", fontSize = 12.sp, color = Color.Gray)
+                                    Text(detail.idBarang, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Kategori Perangkat:", fontSize = 12.sp, color = Color.Gray)
+                                    Text(detail.kategori, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7E22CE))
+                                }
+                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Jumlah Dihibahkan:", fontSize = 12.sp, color = Color.Gray)
+                                    Text("${detail.jumlah} ${detail.satuan}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Surface(
+                            color = Color(0xFFF3E8FF).copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFFDDD6FE)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Penerima / Instansi Tujuan:", fontSize = 12.sp, color = Color(0xFF6B21A8), fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = detail.penerimaHibah,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF581C87)
+                                )
+                            }
+                        }
+
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Alasan / Keterangan Hibah:", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = detail.alasanHibah,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF334155)
+                                )
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                            Text("Tanggal: ${detail.tanggalHibah}", fontSize = 11.sp, color = Color.Gray)
+                            Text("Petugas: ${detail.petugas}", fontSize = 11.sp, color = Color.Gray)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { selectedHibahDetail = null },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Tutup", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             )

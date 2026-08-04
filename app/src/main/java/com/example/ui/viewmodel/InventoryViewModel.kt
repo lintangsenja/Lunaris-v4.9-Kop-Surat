@@ -1670,9 +1670,16 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     // Explicitly expose maintenance items from damaged_items table, matching Status and synchronized with Date Filters
     val maintenanceItems: StateFlow<List<com.example.data.entity.DamagedItemEntity>> = allDamagedItems
         .map { list ->
-            val result = list.filter { 
-                it.status.equals("Servis Luar/Pemeliharaan", ignoreCase = true) || 
-                it.status.equals("Pemeliharaan", ignoreCase = true)
+            val result = list.filter { item ->
+                val isMaint = item.status.contains("Pemeliharaan", ignoreCase = true) || 
+                              item.status.contains("Servis", ignoreCase = true) || 
+                              item.kondisiBaru.contains("Pemeliharaan", ignoreCase = true) || 
+                              item.kondisiBaru.contains("Servis", ignoreCase = true) || 
+                              item.kondisiBaru.contains("Perbaikan", ignoreCase = true)
+                val notDone = !item.status.contains("Normal", ignoreCase = true) && 
+                              !item.status.contains("Selesai", ignoreCase = true) && 
+                              !item.status.contains("Dihibahkan", ignoreCase = true)
+                isMaint && notDone
             }
             Log.d("InventoryVM", "Loaded ${result.size} maintenance items from damaged_items table")
             result
@@ -2839,13 +2846,15 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
                 // Stock Validation
-                val existingItem = itemsWithStock.value.find { it.idBarang == idBarang }
+                val existingItem = itemsWithStock.value.find { it.idBarang.trim().equals(idBarang.trim(), ignoreCase = true) }
                 if (existingItem != null && existingItem.stokTersedia < jumlah) {
                     onError("Stok tidak mencukupi! Tersedia: ${existingItem.stokTersedia} ${existingItem.satuan}")
                     return@launch
                 }
 
+                val reportId = (System.currentTimeMillis() % 1000000000).toInt()
                 val newReport = com.example.data.entity.DamagedItemEntity(
+                    id = reportId,
                     idBarang = idBarang,
                     namaBarang = namaBarang,
                     jumlah = jumlah,
@@ -3096,6 +3105,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     namaPetugas = officer
                 )
 
+                logSystemActivity(
+                    activityType = "Hibah / Penghapusan Aset",
+                    subjectName = "ID #$id",
+                    details = "Aset dihibahkan / dihapus ke instansi '$penerima'. Alasan: ${alasan.trim()}",
+                    officerName = officer
+                )
+
                 onSuccess()
             } catch (e: Exception) {
                 onError("Gagal merekam hibah aset: ${e.localizedMessage ?: "Terjadi kesalahan"}")
@@ -3129,6 +3145,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     currentTime = currentTime
                 )
 
+                logSystemActivity(
+                    activityType = "Transfer Ke Pemeliharaan",
+                    subjectName = "ID #$id",
+                    details = "Perangkat dialihkan dari Alat Rusak ke Pemeliharaan ($newStatusStr). Catatan: ${catatan.trim()}",
+                    officerName = officer
+                )
+
                 onSuccess()
             } catch (e: Exception) {
                 onError("Gagal mengalihkan status ke pemeliharaan: ${e.localizedMessage ?: "Terjadi kesalahan"}")
@@ -3148,13 +3171,22 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 val sdfTime = java.text.SimpleDateFormat("HH:mm", java.util.Locale("id", "ID"))
                 val currentDate = sdfDate.format(java.util.Date())
                 val currentTime = sdfTime.format(java.util.Date())
+                val officer = if (namaPetugas.isBlank()) defaultOfficer.value.ifBlank { "Administrator" } else namaPetugas.trim()
 
                 repository.deleteDamagedItemPermanently(
                     id = id,
                     currentDate = currentDate,
                     currentTime = currentTime,
-                    namaPetugas = if (namaPetugas.isBlank()) "Administrator" else namaPetugas.trim()
+                    namaPetugas = officer
                 )
+
+                logSystemActivity(
+                    activityType = "Penghapusan Aset Permanen",
+                    subjectName = "ID #$id",
+                    details = "Perangkat dihapus fisik secara permanen dari daftar inventaris (Afkir).",
+                    officerName = officer
+                )
+
                 onSuccess()
             } catch (e: Exception) {
                 onError("Gagal menghapus secara permanen: ${e.localizedMessage ?: "Terjadi kesalahan"}")

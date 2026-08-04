@@ -92,10 +92,14 @@ fun AlatRusakScreen(
     val rawHistoryList by viewModel.allDamagedItems.collectAsState()
     // Filter history specifically for broken tools (Alat Rusak)
     val historyList = remember(rawHistoryList) {
-        rawHistoryList.filter {
-            !it.status.equals("Servis Luar/Pemeliharaan", ignoreCase = true) &&
-            !it.status.equals("Pemeliharaan", ignoreCase = true) &&
-            !it.status.equals("Normal (Tersedia)", ignoreCase = true)
+        rawHistoryList.filter { item ->
+            val isMaint = item.status.contains("Pemeliharaan", ignoreCase = true) || 
+                          item.status.contains("Servis", ignoreCase = true)
+            val isReady = item.status.contains("Normal", ignoreCase = true) || 
+                          item.status.contains("Tersedia", ignoreCase = true) || 
+                          item.status.contains("Selesai", ignoreCase = true) || 
+                          item.status.contains("Dihibahkan", ignoreCase = true)
+            !isMaint && !isReady
         }
     }
     val defaultOfficerState by viewModel.defaultOfficer.collectAsState()
@@ -185,6 +189,7 @@ fun AlatRusakScreen(
 
     // Validation & Hibah states
     var itemToValidate by remember { mutableStateOf<DamagedItemEntity?>(null) }
+    var itemToAdvancedActions by remember { mutableStateOf<DamagedItemEntity?>(null) }
     var validatorOfficer by remember { mutableStateOf(defaultOfficer) }
     var validationNotes by remember { mutableStateOf("") }
 
@@ -976,9 +981,13 @@ fun AlatRusakScreen(
                                                     // Validasi (2x)
                                                     IconButton(
                                                         onClick = {
-                                                            itemToValidate = item
-                                                            validatorOfficer = defaultOfficer
-                                                            validationNotes = ""
+                                                            if (item.validationCount >= 2) {
+                                                                itemToAdvancedActions = item
+                                                            } else {
+                                                                itemToValidate = item
+                                                                validatorOfficer = defaultOfficer
+                                                                validationNotes = ""
+                                                            }
                                                         },
                                                         modifier = Modifier
                                                             .size(36.dp)
@@ -986,31 +995,12 @@ fun AlatRusakScreen(
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.VerifiedUser,
-                                                            contentDescription = "Validasi Kerusakan (${item.validationCount}/2)",
+                                                            contentDescription = if (item.validationCount >= 2) "Aksi Lanjutan Tervalidasi (${item.validationCount}/2)" else "Validasi Kerusakan (${item.validationCount}/2)",
                                                             tint = if (item.validationCount >= 2) Color(0xFF10B981) else Color(0xFFF59E0B),
                                                             modifier = Modifier.size(20.dp)
                                                         )
                                                     }
 
-                                                    // Hibah / Afkir Aset
-                                                    IconButton(
-                                                        onClick = {
-                                                            itemToHibah = item
-                                                            penerimaHibah = ""
-                                                            alasanHibah = ""
-                                                        },
-                                                        enabled = item.validationCount >= 2,
-                                                        modifier = Modifier
-                                                            .size(36.dp)
-                                                            .testTag("btn_hibah_${item.id}")
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.CardGiftcard,
-                                                            contentDescription = "Hibah / Afkir Aset",
-                                                            tint = if (item.validationCount >= 2) Color(0xFF8B5CF6) else Color.Gray.copy(alpha = 0.3f),
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
                                                     // Normal (Kembali ke Stok)
                                                     IconButton(
                                                         onClick = { itemToNormal = item },
@@ -1047,14 +1037,28 @@ fun AlatRusakScreen(
 
                                                     // Hapus Permanen
                                                     IconButton(
-                                                        onClick = { itemToDeletePermanently = item },
+                                                        onClick = {
+                                                            val record = item
+                                                            viewModel.updateDamagedStatus(
+                                                                damagedId = record.id,
+                                                                newStatus = "Hapus Aset",
+                                                                alasan = "Dialihkan ke Modul Hapus Aset oleh Administrator",
+                                                                namaPetugas = defaultOfficer,
+                                                                onSuccess = {
+                                                                    Toast.makeText(context, "Perangkat '${record.namaBarang}' dialihkan ke Modul Hapus Aset!", Toast.LENGTH_LONG).show()
+                                                                },
+                                                                onError = { err ->
+                                                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                                                }
+                                                            )
+                                                        },
                                                         modifier = Modifier
                                                             .size(36.dp)
                                                             .testTag("btn_hapus_${item.id}")
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.Delete,
-                                                            contentDescription = "Hapus Permanen",
+                                                            contentDescription = "Oper ke Modul Hapus Aset",
                                                             tint = if (isDark) Color(0xFFF87171) else Color(0xFFEF4444),
                                                             modifier = Modifier.size(20.dp)
                                                         )
@@ -1333,6 +1337,97 @@ fun AlatRusakScreen(
                 dismissButton = {
                     TextButton(onClick = { itemToHibah = null }) {
                         Text("Batal")
+                    }
+                }
+            )
+        }
+
+        // Dialog 6: Advanced Actions Dialog for Validated Items (Validasi 2/2 Complete)
+        if (itemToAdvancedActions != null) {
+            val validatedItem = itemToAdvancedActions!!
+            AlertDialog(
+                onDismissRequest = { itemToAdvancedActions = null },
+                title = { 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Opsi Aksi Lanjutan (Tervalidasi 2/2)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "Perangkat '${validatedItem.namaBarang}' telah tervalidasi 2x oleh petugas. Silakan pilih tindakan lanjutan yang akan diambil oleh administrator:",
+                            fontSize = 13.sp,
+                            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color.DarkGray
+                        )
+                        
+                        // Option A: Oper ke Modul Hapus Aset (Afkir)
+                        OutlinedButton(
+                            onClick = {
+                                val record = validatedItem
+                                itemToAdvancedActions = null
+                                viewModel.updateDamagedStatus(
+                                    damagedId = record.id,
+                                    newStatus = "Hapus Aset",
+                                    alasan = "Dialihkan ke Modul Hapus Aset oleh Administrator",
+                                    namaPetugas = defaultOfficer,
+                                    onSuccess = {
+                                        Toast.makeText(context, "Perangkat '${record.namaBarang}' dialihkan ke Modul Hapus Aset!", Toast.LENGTH_LONG).show()
+                                    },
+                                    onError = { err ->
+                                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Oper ke Modul Hapus Aset (Afkir)", fontWeight = FontWeight.Bold)
+                        }
+
+                        // Option C: Konfirmasi Normal
+                        OutlinedButton(
+                            onClick = {
+                                val record = validatedItem
+                                itemToAdvancedActions = null
+                                itemToNormal = record
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF10B981)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Konfirmasi Normal (Kembali ke Stok)", fontWeight = FontWeight.Bold)
+                        }
+
+                        // Option D: Kembalikan ke Pemeliharaan
+                        OutlinedButton(
+                            onClick = {
+                                val record = validatedItem
+                                itemToAdvancedActions = null
+                                itemToMaintenance = record
+                                maintenanceNote = ""
+                                maintenanceOfficer = defaultOfficer
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3B82F6)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Kembalikan ke Pemeliharaan (Kirim Servis)", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { itemToAdvancedActions = null }) {
+                        Text("Tutup")
                     }
                 }
             )
