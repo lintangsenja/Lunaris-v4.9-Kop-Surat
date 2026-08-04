@@ -2,11 +2,15 @@ package com.example.data.repository
 
 import com.example.data.dao.InventoryDao
 import com.example.data.entity.LoanTransactionEntity
+import com.example.data.entity.isFakeTransaction
 import com.example.data.network.FirebaseService
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -15,20 +19,52 @@ class AuditRepository(
     private val dao: InventoryDao,
     private val firebaseService: FirebaseService
 ) {
+    private val coroutineScope = CoroutineScope(Dispatchers.IO)
     private val _systemLogs = MutableStateFlow<List<LoanTransactionEntity>>(emptyList())
     val systemLogs: StateFlow<List<LoanTransactionEntity>> = _systemLogs.asStateFlow()
 
     init {
-        listenToAuditLogs()
+        listenToLocalAuditLogs()
+        listenToCloudAuditLogs()
     }
 
-    private fun listenToAuditLogs() {
+    private fun listenToLocalAuditLogs() {
+        coroutineScope.launch {
+            try {
+                dao.getAllTransactions().collect { list ->
+                    val localSystemLogs = list.filter { it.isFakeTransaction() }
+                    updateSystemLogs(localLogs = localSystemLogs)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private var cachedCloudLogs = listOf<LoanTransactionEntity>()
+    private var cachedLocalLogs = listOf<LoanTransactionEntity>()
+
+    private fun updateSystemLogs(
+        localLogs: List<LoanTransactionEntity>? = null,
+        cloudLogs: List<LoanTransactionEntity>? = null
+    ) {
+        if (localLogs != null) cachedLocalLogs = localLogs
+        if (cloudLogs != null) cachedCloudLogs = cloudLogs
+
+        val mergedMap = LinkedHashMap<String, LoanTransactionEntity>()
+        (_systemLogs.value + cachedLocalLogs + cachedCloudLogs).forEach { item ->
+            mergedMap[item.idTransaksi] = item
+        }
+        _systemLogs.value = mergedMap.values.sortedByDescending { it.idTransaksi }
+    }
+
+    private fun listenToCloudAuditLogs() {
         try {
             val firestore = FirebaseFirestore.getInstance()
             firestore.collection("audit_logs")
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) return@addSnapshotListener
-                    val list = snapshot.documents.mapNotNull { doc ->
+                    val cloudList = snapshot.documents.mapNotNull { doc ->
                         val idTx = doc.id
                         val tanggal = doc.getString("tanggal") ?: ""
                         val namaPeminjam = doc.getString("namaPeminjam") ?: ""
@@ -48,7 +84,16 @@ class AuditRepository(
                             keteranganKerusakan = doc.getString("keteranganKerusakan")
                         )
                     }
-                    _systemLogs.value = list.sortedByDescending { it.idTransaksi }
+                    updateSystemLogs(cloudLogs = cloudList)
+                    coroutineScope.launch {
+                        cloudList.forEach { tx ->
+                            try {
+                                dao.insertTransaction(tx)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
                 }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -88,9 +133,15 @@ class AuditRepository(
             keteranganKerusakan = details
         )
 
+        try {
+            dao.insertTransaction(auditTx)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         val current = _systemLogs.value.toMutableList()
         current.add(0, auditTx)
-        _systemLogs.value = current
+        _systemLogs.value = current.distinctBy { it.idTransaksi }.sortedByDescending { it.idTransaksi }
 
         try {
             val firestore = FirebaseFirestore.getInstance()

@@ -2859,6 +2859,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 repository.recordDamagedReport(newReport)
 
+                val isMaint = status.contains("Servis") || status.contains("Pemeliharaan") || kondisiBaru.contains("Perbaikan")
                 logSystemActivity(
                     activityType = if (isMaint) "Laporan Servis" else "Laporan Kerusakan",
                     subjectName = "$namaBarang ($jumlah unit)",
@@ -3791,6 +3792,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 repository.updateItem(item)
                 firebaseService.saveItemToFirestore(item)
 
+                logSystemActivity(
+                    activityType = "Edit Master Inventaris",
+                    subjectName = namaBarang,
+                    details = "Memperbarui detail inventaris '$namaBarang' (ID: $idBarang, Stok: $stokAwal $satuan, Merek: $merekAlat, Ruang: $ruang).",
+                    officerName = defaultOfficer.value
+                )
+
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.localizedMessage ?: "Gagal memperbarui data barang")
@@ -3811,6 +3819,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 repository.deleteItemById(idBarang)
                 firebaseService.deleteItemFromFirestore(idBarang)
+
+                logSystemActivity(
+                    activityType = "Hapus Master Inventaris",
+                    subjectName = itemName,
+                    details = "Menghapus data inventaris '$itemName' (ID: $idBarang) dari master data.",
+                    officerName = defaultOfficer.value
+                )
 
                 onSuccess()
             } catch (e: Exception) {

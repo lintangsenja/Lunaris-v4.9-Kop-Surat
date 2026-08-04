@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.data.entity.isFakeTransaction
 import com.example.ui.components.LunarisCard
 import com.example.ui.components.LunarisTextField
 import com.example.ui.components.FilterGroup
@@ -271,7 +272,8 @@ fun LogTransaksiScreen(
 
     val lendingTransactions = remember(transactions, isSiswaUser, currentStudentName) {
         transactions.filter { tx ->
-            val isLendingType = !tx.idTransaksi.startsWith("TX-SYN") &&
+            val isLendingType = !tx.isFakeTransaction() &&
+                    !tx.idTransaksi.startsWith("TX-SYN") &&
                     !tx.idTransaksi.startsWith("TX-INP") &&
                     !tx.idTransaksi.startsWith("TX-OPN") &&
                     !tx.idTransaksi.startsWith("TX-RUM") &&
@@ -429,8 +431,12 @@ fun LogTransaksiScreen(
     }
 
     // 5. FILTERING Log Aktivitas Sistem (Komprehensif mencatat seluruh mutasi gudang)
-    val sistemTransactions = remember(transactions) {
-        transactions
+    val sistemTransactions = remember(systemLogs, transactions) {
+        if (systemLogs.isNotEmpty()) {
+            systemLogs
+        } else {
+            transactions
+        }
     }
     val filteredSistemLog = remember(sistemTransactions, searchQuery) {
         sistemTransactions.filter { tx ->

@@ -170,6 +170,7 @@ fun DashboardScreen(
     val isDark = false
     val items by viewModel.itemsWithStock.collectAsState()
     val activeTransactions by viewModel.activeTransactions.collectAsState()
+    val systemLogs by viewModel.systemLogs.collectAsState()
     val userRole by viewModel.userRole.collectAsState()
     val studentPermissions by viewModel.studentPermissions.collectAsState()
 
@@ -274,13 +275,31 @@ fun DashboardScreen(
         }
     }
 
-    val globalActivities = remember(recentFirestoreActivities, allTransactions) {
+    val globalActivities = remember(recentFirestoreActivities, allTransactions, systemLogs) {
         val list = mutableListOf<GlobalActivity>()
         
-        // 1. Add real-time loan transactions from Firestore (filtering out any fake audit logs)
-        list.addAll(recentFirestoreActivities.filter { !com.example.data.entity.isFakeLoanTransaction(it.id, it.type, "", it.title) })
+        // 1. Add System Activity Logs (Impor, Tambah Manual, Edit, Mutasi, dll)
+        systemLogs.take(10).forEach { log ->
+            list.add(
+                GlobalActivity(
+                    id = log.idTransaksi,
+                    title = log.namaPeminjam,
+                    subtitle = "${log.status} • ${log.namaPetugas}",
+                    date = log.tanggal,
+                    time = log.waktu,
+                    type = "Aktivitas",
+                    statusText = log.status,
+                    statusColor = Color(0xFF3B82F6)
+                )
+            )
+        }
         
-        // 2. Add real circulation transactions from local database
+        // 2. Add real-time loan transactions from Firestore (filtering out any fake audit logs)
+        recentFirestoreActivities.filter { !com.example.data.entity.isFakeLoanTransaction(it.id, it.type, "", it.title) }.forEach { act ->
+            if (list.none { it.id == act.id }) list.add(act)
+        }
+        
+        // 3. Add real circulation transactions from local database
         allTransactions.filter { !it.isFakeTransaction() }.forEach { tx ->
             if (list.none { it.id == tx.idTransaksi }) {
                 val isReturned = tx.status == "Kembali" || tx.status == "Dikembalikan"
