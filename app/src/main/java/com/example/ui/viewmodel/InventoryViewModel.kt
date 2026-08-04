@@ -2859,6 +2859,37 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
                 repository.recordDamagedReport(newReport)
 
+                // Update main item stock & condition
+                if (existingItem != null) {
+                    val newStokRusak = existingItem.stokRusak + jumlah
+                    val isMaint = status.contains("Servis", ignoreCase = true) || status.contains("Pemeliharaan", ignoreCase = true) || kondisiBaru.contains("Perbaikan", ignoreCase = true) || kondisiBaru.contains("Pemeliharaan", ignoreCase = true)
+                    val newKondisi = if (isMaint) "Dalam Pemeliharaan" else kondisiBaru.ifBlank { "Dalam Pemeliharaan" }
+
+                    val updatedItemEntity = com.example.data.entity.ItemEntity(
+                        idBarang = existingItem.idBarang,
+                        namaBarang = existingItem.namaBarang,
+                        serialNumber = existingItem.serialNumber,
+                        stokAwal = existingItem.stokAwal,
+                        stokRusak = newStokRusak,
+                        kategori = existingItem.kategori,
+                        satuan = existingItem.satuan,
+                        merekAlat = existingItem.merekAlat,
+                        ruang = existingItem.ruang,
+                        sumberDana = existingItem.sumberDana,
+                        kondisi = newKondisi,
+                        keterangan = existingItem.keterangan,
+                        isDemo = existingItem.isDemo,
+                        type = existingItem.type,
+                        isBorrowable = existingItem.isBorrowable
+                    )
+                    try {
+                        repository.updateItem(updatedItemEntity)
+                        firebaseService.saveItemToFirestore(updatedItemEntity)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
                 val isMaint = status.contains("Servis") || status.contains("Pemeliharaan") || kondisiBaru.contains("Perbaikan")
                 logSystemActivity(
                     activityType = if (isMaint) "Laporan Servis" else "Laporan Kerusakan",
@@ -2881,6 +2912,38 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     ) {
         viewModelScope.launch {
             try {
+                val damagedReport = allDamagedItems.value.find { it.id == id }
+                if (damagedReport != null) {
+                    val mainItem = itemsWithStock.value.find { it.idBarang == damagedReport.idBarang }
+                    if (mainItem != null) {
+                        val newStokRusak = (mainItem.stokRusak - damagedReport.jumlah).coerceAtLeast(0)
+                        val newKondisi = if (newStokRusak == 0) "Baik / Normal" else mainItem.kondisi
+
+                        val updatedItemEntity = com.example.data.entity.ItemEntity(
+                            idBarang = mainItem.idBarang,
+                            namaBarang = mainItem.namaBarang,
+                            serialNumber = mainItem.serialNumber,
+                            stokAwal = mainItem.stokAwal,
+                            stokRusak = newStokRusak,
+                            kategori = mainItem.kategori,
+                            satuan = mainItem.satuan,
+                            merekAlat = mainItem.merekAlat,
+                            ruang = mainItem.ruang,
+                            sumberDana = mainItem.sumberDana,
+                            kondisi = newKondisi,
+                            keterangan = mainItem.keterangan,
+                            isDemo = mainItem.isDemo,
+                            type = mainItem.type,
+                            isBorrowable = mainItem.isBorrowable
+                        )
+                        try {
+                            repository.updateItem(updatedItemEntity)
+                            firebaseService.saveItemToFirestore(updatedItemEntity)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
                 repository.cancelDamagedReport(id)
                 onSuccess()
             } catch (e: Exception) {
@@ -2918,6 +2981,45 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     currentDate = currentDate,
                     currentTime = currentTime
                 )
+
+                // Sync main item condition & stock when marked as resolved or returned to active stock
+                val damagedReport = allDamagedItems.value.find { it.id == damagedId }
+                if (damagedReport != null) {
+                    val mainItem = itemsWithStock.value.find { it.idBarang == damagedReport.idBarang }
+                    if (mainItem != null) {
+                        val isResolved = newStatus.contains("Normal", ignoreCase = true) || newStatus.contains("Tersedia", ignoreCase = true) || newStatus.contains("Selesai", ignoreCase = true)
+                        val newStokRusak = if (isResolved) (mainItem.stokRusak - damagedReport.jumlah).coerceAtLeast(0) else mainItem.stokRusak
+                        val newKondisi = if (isResolved) {
+                            if (newStokRusak == 0) "Baik / Normal" else mainItem.kondisi
+                        } else {
+                            "Dalam Pemeliharaan"
+                        }
+
+                        val updatedItemEntity = com.example.data.entity.ItemEntity(
+                            idBarang = mainItem.idBarang,
+                            namaBarang = mainItem.namaBarang,
+                            serialNumber = mainItem.serialNumber,
+                            stokAwal = mainItem.stokAwal,
+                            stokRusak = newStokRusak,
+                            kategori = mainItem.kategori,
+                            satuan = mainItem.satuan,
+                            merekAlat = mainItem.merekAlat,
+                            ruang = mainItem.ruang,
+                            sumberDana = mainItem.sumberDana,
+                            kondisi = newKondisi,
+                            keterangan = mainItem.keterangan,
+                            isDemo = mainItem.isDemo,
+                            type = mainItem.type,
+                            isBorrowable = mainItem.isBorrowable
+                        )
+                        try {
+                            repository.updateItem(updatedItemEntity)
+                            firebaseService.saveItemToFirestore(updatedItemEntity)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
 
                 logSystemActivity(
                     activityType = "Ubah Status Pemeliharaan",
@@ -4052,6 +4154,15 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     }
 
                     if (matchedItem != null) {
+                        if (matchedItem.kondisi.contains("Pemeliharaan", ignoreCase = true) ||
+                            matchedItem.kondisi.contains("Servis", ignoreCase = true) ||
+                            matchedItem.kondisi.contains("Perawatan", ignoreCase = true)) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                onError("Perangkat '${matchedItem.namaBarang}' sedang dalam status Pemeliharaan dan terkunci untuk transaksi peminjaman.")
+                            }
+                            return@launch
+                        }
+
                         val availableStock = matchedItem.stokTersedia
                         if (totalQty > availableStock) {
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {

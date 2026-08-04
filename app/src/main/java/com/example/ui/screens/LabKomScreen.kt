@@ -13,6 +13,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -2195,17 +2196,22 @@ fun DiagnosisPcDialog(
     onConfirmSave: (tanggal: String, jumlah: Int, jenisDiagnosa: String, keterangan: String, namaPetugas: String) -> Unit
 ) {
     val context = LocalContext.current
+    val isDark = isSystemInDarkTheme()
 
     // 1. Tanggal Diagnosa (Default today yyyy-MM-dd)
     val sdfDate = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("id", "ID")) }
     var tanggalInput by remember { mutableStateOf(sdfDate.format(java.util.Date())) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    // 2. Jumlah Perawatan & Sisa Stok
+    // 2. Perhitungan Sisa Stok & Normal Available
     val totalStok = if (pc.qty > 0) pc.qty else 1
+    val isInMaintenance = pc.status.contains("Perawatan", ignoreCase = true) || 
+                          pc.status.contains("Pemeliharaan", ignoreCase = true) || 
+                          pc.status.contains("Servis", ignoreCase = true)
+    val stokNormalTersedia = if (isInMaintenance) 0 else totalStok
+
     var jumlahInput by remember { mutableStateOf("1") }
     val enteredJumlah = jumlahInput.toIntOrNull() ?: 0
-    val sisaStok = (totalStok - enteredJumlah).coerceAtLeast(0)
 
     // 3. Satuan Otomatis
     val satuanAuto = pc.satuan.ifBlank { "Unit" }
@@ -2240,17 +2246,17 @@ fun DiagnosisPcDialog(
                 .fillMaxWidth(0.92f)
                 .wrapContentHeight()
                 .padding(vertical = 16.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = Color.White,
+            shape = RoundedCornerShape(24.dp),
+            color = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
             tonalElevation = 6.dp,
-            shadowElevation = 8.dp
+            shadowElevation = 10.dp
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(18.dp)
+                    .padding(20.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Header Banner
                 Row(
@@ -2259,15 +2265,15 @@ fun DiagnosisPcDialog(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Surface(
-                        color = Color(0xFFD97706).copy(alpha = 0.12f),
+                        color = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFF3E8FF),
                         shape = CircleShape,
-                        modifier = Modifier.size(42.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Build,
                                 contentDescription = null,
-                                tint = Color(0xFFD97706),
+                                tint = if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else DeepPurpleText,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -2277,55 +2283,73 @@ fun DiagnosisPcDialog(
                             text = "Formulir Diagnosa & Pemeliharaan",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = Color(0xFF0F172A)
+                            color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText
                         )
                         Text(
                             text = "${pc.name} (${pc.id.ifBlank { "PC Unit" }})",
                             fontSize = 12.sp,
-                            color = Color(0xFF64748B)
+                            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B)
                         )
                     }
                 }
 
-                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+                HorizontalDivider(color = if (isDark) MaterialTheme.colorScheme.outlineVariant else Color(0xFFF1F5F9), thickness = 1.dp)
 
-                // Pure White Card 1: Tanggal & Jumlah
+                // Card 1: Tanggal & Jumlah
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f) else Color(0xFFF8FAFC)
+                    ),
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outlineVariant else Color(0xFFE2E8F0))
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = "1. Informasi Tanggal & Jumlah Perawatan",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Color(0xFF334155)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = if (isDark) MaterialTheme.colorScheme.primary else DeepPurpleText,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "1. Informasi Tanggal & Jumlah Perawatan",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText
+                            )
+                        }
 
                         // Tanggal Diagnosa Input Box with Picker
                         OutlinedTextField(
                             value = tanggalInput,
                             onValueChange = { tanggalInput = it },
-                            label = { Text("Tanggal Diagnosa *", fontSize = 11.sp) },
-                            placeholder = { Text("YYYY-MM-DD", fontSize = 11.sp) },
+                            label = { Text("Tanggal Diagnosa *", fontSize = 12.sp) },
+                            placeholder = { Text("YYYY-MM-DD", fontSize = 12.sp) },
                             trailingIcon = {
                                 IconButton(onClick = { showDatePicker = true }) {
                                     Icon(
                                         imageVector = Icons.Default.CalendarToday,
                                         contentDescription = "Pilih Tanggal",
-                                        tint = Color(0xFFD97706),
+                                        tint = if (isDark) MaterialTheme.colorScheme.primary else DeepPurpleText,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
                             },
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF7C3AED),
+                                unfocusedBorderColor = if (isDark) MaterialTheme.colorScheme.outline else Color.Gray.copy(alpha = 0.4f),
+                                focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
+                                unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("input_tanggal_diagnosa")
@@ -2345,21 +2369,34 @@ fun DiagnosisPcDialog(
                                             jumlahInput = input
                                         }
                                     },
-                                    label = { Text("Jumlah Unit *", fontSize = 11.sp) },
+                                    label = { Text("Jumlah Unit *", fontSize = 12.sp) },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF7C3AED),
+                                        unfocusedBorderColor = if (isDark) MaterialTheme.colorScheme.outline else Color.Gray.copy(alpha = 0.4f),
+                                        focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
+                                        unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+                                    ),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .testTag("input_jumlah_diagnosa")
                                 )
 
                                 // Real-time remaining stock status text
+                                val isOverStock = enteredJumlah > stokNormalTersedia
+                                val stockInfoText = if (stokNormalTersedia > 0) {
+                                    "Sisa stok: $stokNormalTersedia $satuanAuto (dari $totalStok)"
+                                } else {
+                                    "Stok normal tersedia: 0 $satuanAuto (dalam pemeliharaan)"
+                                }
+
                                 Text(
-                                    text = "Sisa stok: $sisaStok $satuanAuto (dari $totalStok)",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (enteredJumlah > totalStok) Color.Red else Color(0xFF16A34A),
+                                    text = stockInfoText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOverStock || stokNormalTersedia == 0) MaterialTheme.colorScheme.error else Color(0xFF059669),
                                     modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                                 )
                             }
@@ -2370,9 +2407,13 @@ fun DiagnosisPcDialog(
                                 onValueChange = {},
                                 readOnly = true,
                                 enabled = false,
-                                label = { Text("Satuan", fontSize = 11.sp) },
+                                label = { Text("Satuan", fontSize = 12.sp) },
                                 singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    disabledBorderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant else Color.LightGray,
+                                    disabledContainerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF1F5F9)
+                                ),
                                 modifier = Modifier
                                     .weight(0.8f)
                                     .testTag("input_satuan_diagnosa")
@@ -2381,74 +2422,84 @@ fun DiagnosisPcDialog(
                     }
                 }
 
-                // Pure White Card 2: Opsi Jenis Diagnosa
+                // Card 2: Opsi Jenis Diagnosa
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f) else Color(0xFFF8FAFC)
+                    ),
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outlineVariant else Color(0xFFE2E8F0))
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = "2. Jenis Diagnosa / Tindakan",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Color(0xFF334155)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Build,
+                                contentDescription = null,
+                                tint = if (isDark) MaterialTheme.colorScheme.primary else DeepPurpleText,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "2. Jenis Diagnosa / Tindakan",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText
+                            )
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             listOf(
-                                "Pemeliharaan (Servis Internal)" to "Tab Pemeliharaan",
-                                "Servis Luar" to "Tab Servis Luar"
-                            ).forEach { (optionKey, tabDesc) ->
+                                "Pemeliharaan (Servis Internal)" to "Pemeliharaan Internal",
+                                "Servis Luar" to "Servis Luar"
+                            ).forEach { (optionKey, labelText) ->
                                 val isSelected = jenisDiagnosa == optionKey
+                                val activeBg = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFF3E8FF)
+                                val activeBorder = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF7C3AED)
+                                val activeText = if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else DeepPurpleText
+
                                 Surface(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(12.dp))
                                         .border(
                                             width = if (isSelected) 1.5.dp else 1.dp,
-                                            color = if (isSelected) Color(0xFFD97706) else Color(0xFFE2E8F0),
-                                            shape = RoundedCornerShape(10.dp)
+                                            color = if (isSelected) activeBorder else (if (isDark) MaterialTheme.colorScheme.outlineVariant else Color(0xFFE2E8F0)),
+                                            shape = RoundedCornerShape(12.dp)
                                         )
                                         .clickable { jenisDiagnosa = optionKey },
-                                    color = if (isSelected) Color(0xFFFFFBEB) else Color.White
+                                    color = if (isSelected) activeBg else (if (isDark) MaterialTheme.colorScheme.surface else Color.White)
                                 ) {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                                            .padding(horizontal = 10.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         RadioButton(
                                             selected = isSelected,
                                             onClick = { jenisDiagnosa = optionKey },
-                                            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFFD97706)),
+                                            colors = RadioButtonDefaults.colors(
+                                                selectedColor = activeBorder
+                                            ),
                                             modifier = Modifier.size(20.dp)
                                         )
-                                        Column {
-                                            Text(
-                                                text = if (optionKey.contains("Internal")) "Pemeliharaan" else "Servis Luar",
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 11.5.sp,
-                                                color = if (isSelected) Color(0xFF92400E) else Color(0xFF1E293B),
-                                                maxLines = 1
-                                            )
-                                            Text(
-                                                text = tabDesc,
-                                                fontSize = 9.5.sp,
-                                                color = Color(0xFF64748B),
-                                                maxLines = 1
-                                            )
-                                        }
+                                        Text(
+                                            text = labelText,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.5.sp,
+                                            color = if (isSelected) activeText else (if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1E293B)),
+                                            maxLines = 1
+                                        )
                                     }
                                 }
                             }
@@ -2456,34 +2507,52 @@ fun DiagnosisPcDialog(
                     }
                 }
 
-                // Pure White Card 3: Keterangan & Petugas
+                // Card 3: Keterangan & Petugas
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f) else Color(0xFFF8FAFC)
+                    ),
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outlineVariant else Color(0xFFE2E8F0))
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = "3. Keterangan & Penanggung Jawab",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Color(0xFF334155)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = null,
+                                tint = if (isDark) MaterialTheme.colorScheme.primary else DeepPurpleText,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "3. Detail Catatan & Penanggung Jawab",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = if (isDark) MaterialTheme.colorScheme.onSurface else DeepPurpleText
+                            )
+                        }
 
                         // Keterangan Diagnosa (Wajib / Mandatory)
                         OutlinedTextField(
                             value = keteranganInput,
                             onValueChange = { keteranganInput = it },
-                            label = { Text("Keterangan Diagnosa / Kendala *", fontSize = 11.sp) },
-                            placeholder = { Text("Catat detail kendala, kerusakan, atau tindakan servis...", fontSize = 11.sp) },
+                            label = { Text("Keterangan Diagnosa / Kendala *", fontSize = 12.sp) },
+                            placeholder = { Text("Catat detail kendala, kerusakan, atau tindakan servis...", fontSize = 12.sp) },
                             minLines = 2,
                             maxLines = 4,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF7C3AED),
+                                unfocusedBorderColor = if (isDark) MaterialTheme.colorScheme.outline else Color.Gray.copy(alpha = 0.4f),
+                                focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
+                                unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("input_keterangan_diagnosa")
@@ -2493,10 +2562,16 @@ fun DiagnosisPcDialog(
                         OutlinedTextField(
                             value = namaPetugasInput,
                             onValueChange = { namaPetugasInput = it },
-                            label = { Text("Nama Petugas / Penanggung Jawab *", fontSize = 11.sp) },
-                            placeholder = { Text("Nama Petugas LabKom", fontSize = 11.sp) },
+                            label = { Text("Nama Petugas / Penanggung Jawab *", fontSize = 12.sp) },
+                            placeholder = { Text("Nama Petugas LabKom", fontSize = 12.sp) },
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF7C3AED),
+                                unfocusedBorderColor = if (isDark) MaterialTheme.colorScheme.outline else Color.Gray.copy(alpha = 0.4f),
+                                focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
+                                unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("input_petugas_diagnosa")
@@ -2504,11 +2579,11 @@ fun DiagnosisPcDialog(
                     }
                 }
 
-                // Balanced Action Buttons (Batal & Simpan)
+                // Action Buttons (Batal & Simpan)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 6.dp),
+                        .padding(top = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2516,16 +2591,16 @@ fun DiagnosisPcDialog(
                         onClick = onDismissRequest,
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp)
+                            .height(50.dp)
                             .testTag("btn_batal_diagnosa"),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.5.dp, Color(0xFFCBD5E1))
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.5.dp, if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFCBD5E1))
                     ) {
                         Text(
                             text = "Batal",
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF475569),
-                            fontSize = 13.sp
+                            color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF475569),
+                            fontSize = 14.sp
                         )
                     }
 
@@ -2539,6 +2614,10 @@ fun DiagnosisPcDialog(
                                 Toast.makeText(context, "Jumlah unit harus lebih dari 0!", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
+                            if (stokNormalTersedia > 0 && enteredJumlah > stokNormalTersedia) {
+                                Toast.makeText(context, "Jumlah unit melebihi stok normal yang tersedia ($stokNormalTersedia $satuanAuto)!", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
                             onConfirmSave(
                                 tanggalInput,
                                 enteredJumlah,
@@ -2547,12 +2626,12 @@ fun DiagnosisPcDialog(
                                 namaPetugasInput.ifBlank { "Laboran Komputer" }
                             )
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         modifier = Modifier
-                            .weight(1.2f)
-                            .height(46.dp)
+                            .weight(1.3f)
+                            .height(50.dp)
                             .testTag("btn_simpan_diagnosa"),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Save,
@@ -2563,7 +2642,7 @@ fun DiagnosisPcDialog(
                         Text(
                             text = "Simpan Diagnosa",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
                         )
                     }
                 }

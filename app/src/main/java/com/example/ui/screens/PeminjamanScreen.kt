@@ -191,10 +191,13 @@ fun PeminjamanScreen(
     }
 
     val availableBorrowableItems = remember(itemsState, isStudentContext) {
-        if (isStudentContext) {
-            itemsState.filter { it.type == "ALAT" && it.isBorrowable }
-        } else {
-            itemsState.filter { it.type == "ALAT" }
+        itemsState.filter { item ->
+            val isTypeOk = if (isStudentContext) (item.type == "ALAT" && item.isBorrowable) else item.type == "ALAT"
+            val isNotInMaintenance = !item.kondisi.contains("Pemeliharaan", ignoreCase = true) &&
+                                     !item.kondisi.contains("Servis", ignoreCase = true) &&
+                                     !item.kondisi.contains("Perawatan", ignoreCase = true)
+            val hasAvailableStock = item.stokTersedia > 0
+            isTypeOk && isNotInMaintenance && hasAvailableStock
         }
     }
 

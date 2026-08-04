@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
@@ -71,8 +72,20 @@ fun PemeliharaanScreen(
 ) {
     val context = LocalContext.current
     val allItems by viewModel.itemsWithStock.collectAsState()
+
+    fun isLabKomOrComputerItem(item: ItemWithStock): Boolean {
+        val type = item.type.uppercase()
+        val id = item.idBarang.uppercase()
+        val kat = item.kategori.uppercase()
+        val name = item.namaBarang.uppercase()
+        return type == "LABKOM" ||
+               id.startsWith("PC-") || id.startsWith("LAB-") || id.startsWith("KOMP-") ||
+               kat.contains("LABKOM") || kat.contains("KOMPUTER") || kat.contains("LAB") ||
+               name.contains("PC LAB") || name.contains("WORKSTATION") || name.contains("KOMPUTER")
+    }
+
     val alatItems = remember(allItems) {
-        allItems.filter { !it.kategori.equals("Logistik", ignoreCase = true) }
+        allItems.filter { !it.kategori.equals("Logistik", ignoreCase = true) && !isLabKomOrComputerItem(it) }
     }
     val rawHistoryList by viewModel.allDamagedItems.collectAsState()
     val servisLuarList by viewModel.servisLuarItems.collectAsState()
@@ -116,12 +129,7 @@ fun PemeliharaanScreen(
 
     val defaultPcUnits = remember(allItems) {
         allItems.filter { item ->
-            item.type.equals("LABKOM", ignoreCase = true) ||
-            item.idBarang.startsWith("PC-LAB", ignoreCase = true) ||
-            item.idBarang.startsWith("LAB-", ignoreCase = true) ||
-            item.kategori.contains("LabKom", ignoreCase = true) ||
-            item.namaBarang.contains("PC Lab", ignoreCase = true) ||
-            item.namaBarang.contains("Workstation", ignoreCase = true)
+            isLabKomOrComputerItem(item)
         }.map { item ->
             PcUnitData(
                 id = item.idBarang,
@@ -137,14 +145,17 @@ fun PemeliharaanScreen(
         }
     }
 
-    val filteredPcUnits = remember(alatSearchQuery, defaultPcUnits) {
-        if (alatSearchQuery.isBlank()) {
+    val filteredPcUnits = remember(alatSearchQuery, defaultPcUnits, selectedPc) {
+        val query = alatSearchQuery.trim()
+        val selectedName = selectedPc?.name?.trim() ?: ""
+        if (query.isBlank() || (selectedName.isNotEmpty() && query.equals(selectedName, ignoreCase = true))) {
             defaultPcUnits
         } else {
             defaultPcUnits.filter { 
-                it.name.contains(alatSearchQuery, ignoreCase = true) || 
-                it.id.contains(alatSearchQuery, ignoreCase = true) ||
-                it.serialNumber.contains(alatSearchQuery, ignoreCase = true)
+                it.name.contains(query, ignoreCase = true) || 
+                it.id.contains(query, ignoreCase = true) ||
+                it.serialNumber.contains(query, ignoreCase = true) ||
+                it.jenisPerangkat.contains(query, ignoreCase = true)
             }
         }
     }
@@ -220,11 +231,18 @@ fun PemeliharaanScreen(
             petugasInput.isNotBlank()
 
     // Filtered assets suggestions for searchable dropdown
-    val filteredAlat = remember(alatSearchQuery, alatItems) {
-        if (alatSearchQuery.isBlank()) {
+    val filteredAlat = remember(alatSearchQuery, alatItems, selectedAlat) {
+        val query = alatSearchQuery.trim()
+        val selectedName = selectedAlat?.namaBarang?.trim() ?: ""
+        if (query.isBlank() || (selectedName.isNotEmpty() && query.equals(selectedName, ignoreCase = true))) {
             alatItems
         } else {
-            alatItems.filter { it.namaBarang.contains(alatSearchQuery, ignoreCase = true) }
+            alatItems.filter {
+                it.namaBarang.contains(query, ignoreCase = true) ||
+                it.idBarang.contains(query, ignoreCase = true) ||
+                it.merekAlat.contains(query, ignoreCase = true) ||
+                (it.serialNumber ?: "").contains(query, ignoreCase = true)
+            }
         }
     }
 
@@ -611,7 +629,7 @@ fun PemeliharaanScreen(
 
                                     // Input A: Pilih Alat
                                     Text(
-                                        text = "Pilih Alat",
+                                        text = if (selectedObjekCategory == "Alat") "Pilih Alat / Aset" else "Pilih Komputer / LabKom",
                                         fontWeight = FontWeight.Bold,
                                         color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else DeepPurpleText,
                                         fontSize = 13.sp
@@ -620,20 +638,25 @@ fun PemeliharaanScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(modifier = Modifier.weight(1f)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { dropdownExpanded = true }
+                                        ) {
                                             LunarisTextField(
-                                                value = if (selectedAlat != null) selectedAlat!!.namaBarang else alatSearchQuery,
+                                                value = if (selectedAlat != null) selectedAlat!!.namaBarang else if (selectedPc != null) selectedPc!!.name else alatSearchQuery,
                                                 onValueChange = {
                                                     alatSearchQuery = it
                                                     selectedAlat = null
+                                                    selectedPc = null
                                                     dropdownExpanded = true
                                                 },
-                                                placeholder = { Text("Ketik nama alat...") },
+                                                placeholder = { Text("Klik atau ketik untuk memilih perangkat...") },
                                                 trailingIcon = {
-                                                    IconButton(onClick = { dropdownExpanded = !dropdownExpanded }) {
+                                                    IconButton(onClick = { dropdownExpanded = true }) {
                                                         Icon(
-                                                            imageVector = if (dropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                                            contentDescription = "Pilih"
+                                                            imageVector = Icons.Default.ArrowDropDown,
+                                                            contentDescription = "Pilih Perangkat"
                                                         )
                                                     }
                                                 },
@@ -649,71 +672,272 @@ fun PemeliharaanScreen(
                                                     .fillMaxWidth()
                                                     .testTag("maint_select_input")
                                             )
+                                        }
 
-                                            DropdownMenu(
-                                                expanded = dropdownExpanded,
-                                                onDismissRequest = { dropdownExpanded = false },
-                                                properties = PopupProperties(focusable = false),
-                                                modifier = Modifier.fillMaxWidth(0.85f)
-                                            ) {
-                                                if (selectedObjekCategory == "Alat") {
-                                                    if (filteredAlat.isEmpty()) {
-                                                        DropdownMenuItem(
-                                                            text = { Text("Alat tidak ditemukan") },
-                                                            onClick = { dropdownExpanded = false }
-                                                        )
-                                                    } else {
-                                                        filteredAlat.forEach { item ->
-                                                            DropdownMenuItem(
-                                                                text = { Text("${item.namaBarang} (Stok Ready: ${item.stokTersedia} ${item.satuan})") },
-                                                                onClick = {
-                                                                    selectedAlat = item
-                                                                    selectedPc = null
-                                                                    alatSearchQuery = item.namaBarang
-                                                                    serialNumberInput = item.serialNumber ?: ""
-                                                                    if (jumlahPemeliharaanInput.isBlank() || jumlahPemeliharaanInput == "0") {
-                                                                        jumlahPemeliharaanInput = "1"
-                                                                    }
-                                                                    if (catatanInput.isBlank()) {
-                                                                        catatanInput = "Pemeliharaan & perawatan berkala"
-                                                                    }
-                                                                    dropdownExpanded = false
-                                                                }
-                                                            )
-                                                        }
-                                                    }
-                                                } else {
-                                                    if (filteredPcUnits.isEmpty()) {
-                                                        DropdownMenuItem(
-                                                            text = { Text("Perangkat PC tidak ditemukan") },
-                                                            onClick = { dropdownExpanded = false }
-                                                        )
-                                                    } else {
-                                                        filteredPcUnits.forEach { pc ->
-                                                            DropdownMenuItem(
-                                                                text = { Text("${pc.name} - ${pc.labRoom} [${pc.serialNumber}]") },
-                                                                onClick = {
-                                                                    selectedPc = pc
-                                                                    alatSearchQuery = pc.name
-                                                                    serialNumberInput = pc.serialNumber
-                                                                    jumlahPemeliharaanInput = "1"
-                                                                    selectedAlat = ItemWithStock(
-                                                                        idBarang = pc.id,
-                                                                        namaBarang = pc.name,
-                                                                        kategori = pc.jenisPerangkat,
-                                                                        stokTersedia = pc.qty,
-                                                                        stokAwal = pc.qty,
-                                                                        satuan = pc.satuan,
-                                                                        kondisi = pc.status,
-                                                                        ruang = pc.labRoom
-                                                                    )
-                                                                    dropdownExpanded = false
-                                                                }
-                                                            )
-                                                        }
-                                                    }
+                                        if (dropdownExpanded) {
+                                            var pickerSearchQuery by remember { mutableStateOf("") }
+                                            val isAlatCategory = selectedObjekCategory == "Alat"
+                                            
+                                            val modalFilteredAlat = remember(pickerSearchQuery, alatItems) {
+                                                val q = pickerSearchQuery.trim()
+                                                if (q.isBlank()) alatItems
+                                                else alatItems.filter {
+                                                    it.namaBarang.contains(q, ignoreCase = true) ||
+                                                    it.idBarang.contains(q, ignoreCase = true) ||
+                                                    it.merekAlat.contains(q, ignoreCase = true) ||
+                                                    (it.serialNumber ?: "").contains(q, ignoreCase = true)
                                                 }
                                             }
+
+                                            val modalFilteredPcUnits = remember(pickerSearchQuery, defaultPcUnits) {
+                                                val q = pickerSearchQuery.trim()
+                                                if (q.isBlank()) defaultPcUnits
+                                                else defaultPcUnits.filter {
+                                                    it.name.contains(q, ignoreCase = true) ||
+                                                    it.id.contains(q, ignoreCase = true) ||
+                                                    it.serialNumber.contains(q, ignoreCase = true) ||
+                                                    it.jenisPerangkat.contains(q, ignoreCase = true)
+                                                }
+                                            }
+
+                                            AlertDialog(
+                                                onDismissRequest = { dropdownExpanded = false },
+                                                shape = RoundedCornerShape(24.dp),
+                                                title = {
+                                                    Column {
+                                                        Text(
+                                                            text = "Pilih Perangkat (${if (isAlatCategory) "Alat / Aset" else "Komputer / LabKom"})",
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 17.sp
+                                                        )
+                                                        Text(
+                                                            text = "Menampilkan ${if (isAlatCategory) modalFilteredAlat.size else modalFilteredPcUnits.size} unit ${if (isAlatCategory) "alat/aset murni" else "komputer lab"}",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                },
+                                                text = {
+                                                    Column(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                    ) {
+                                                        LunarisTextField(
+                                                            value = pickerSearchQuery,
+                                                            onValueChange = { pickerSearchQuery = it },
+                                                            placeholder = { Text("Cari nama, id, atau merek (Dell, HP, Epson)...") },
+                                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Cari") },
+                                                            trailingIcon = if (pickerSearchQuery.isNotEmpty()) {
+                                                                {
+                                                                    IconButton(onClick = { pickerSearchQuery = "" }) {
+                                                                        Icon(Icons.Default.Clear, contentDescription = "Bersihkan")
+                                                                    }
+                                                                }
+                                                            } else null,
+                                                            singleLine = true,
+                                                            shape = RoundedCornerShape(12.dp),
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+
+                                                        if (isAlatCategory) {
+                                                            if (modalFilteredAlat.isEmpty()) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                        .padding(vertical = 20.dp),
+                                                                    contentAlignment = Alignment.Center
+                                                                ) {
+                                                                    Text(
+                                                                        "Tidak ada data alat / aset murni.",
+                                                                        color = MaterialTheme.colorScheme.secondary,
+                                                                        fontSize = 13.sp
+                                                                    )
+                                                                }
+                                                            } else {
+                                                                LazyColumn(
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                        .heightIn(max = 280.dp),
+                                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                                ) {
+                                                                    items(modalFilteredAlat) { item ->
+                                                                        Surface(
+                                                                            modifier = Modifier
+                                                                                .fillMaxWidth()
+                                                                                .clip(RoundedCornerShape(14.dp))
+                                                                                .clickable {
+                                                                                    selectedAlat = item
+                                                                                    selectedPc = null
+                                                                                    alatSearchQuery = item.namaBarang
+                                                                                    serialNumberInput = item.serialNumber ?: ""
+                                                                                    if (jumlahPemeliharaanInput.isBlank() || jumlahPemeliharaanInput == "0") {
+                                                                                        jumlahPemeliharaanInput = "1"
+                                                                                    }
+                                                                                    if (catatanInput.isBlank()) {
+                                                                                        catatanInput = "Pemeliharaan & perawatan berkala"
+                                                                                    }
+                                                                                    dropdownExpanded = false
+                                                                                },
+                                                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                                            shape = RoundedCornerShape(14.dp)
+                                                                        ) {
+                                                                            Row(
+                                                                                modifier = Modifier
+                                                                                    .fillMaxWidth()
+                                                                                    .padding(10.dp),
+                                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                                            ) {
+                                                                                Icon(
+                                                                                    Icons.Default.Build,
+                                                                                    contentDescription = null,
+                                                                                    tint = MaterialTheme.colorScheme.primary,
+                                                                                    modifier = Modifier.size(22.dp)
+                                                                                )
+                                                                                Column(modifier = Modifier.weight(1f)) {
+                                                                                    Text(
+                                                                                        item.namaBarang,
+                                                                                        fontWeight = FontWeight.Bold,
+                                                                                        fontSize = 13.5.sp,
+                                                                                        maxLines = 1,
+                                                                                        overflow = TextOverflow.Ellipsis
+                                                                                    )
+                                                                                    val details = listOfNotNull(
+                                                                                        item.idBarang,
+                                                                                        item.merekAlat.takeIf { it.isNotBlank() },
+                                                                                        item.ruang.takeIf { it.isNotBlank() }
+                                                                                    ).joinToString(" • ")
+                                                                                    Text(
+                                                                                        details,
+                                                                                        fontSize = 11.sp,
+                                                                                        color = Color.Gray,
+                                                                                        maxLines = 1,
+                                                                                        overflow = TextOverflow.Ellipsis
+                                                                                    )
+                                                                                }
+                                                                                Column(horizontalAlignment = Alignment.End) {
+                                                                                    Text(
+                                                                                        "Stok: ${item.stokTersedia} ${item.satuan}",
+                                                                                        fontSize = 11.sp,
+                                                                                        fontWeight = FontWeight.Bold,
+                                                                                        color = if (item.stokTersedia > 0) Color(0xFF059669) else Color.Red
+                                                                                    )
+                                                                                    Text(
+                                                                                        item.kondisi.ifBlank { "Baik" },
+                                                                                        fontSize = 10.sp,
+                                                                                        color = MaterialTheme.colorScheme.primary
+                                                                                    )
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        } else {
+                                                            if (modalFilteredPcUnits.isEmpty()) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                        .padding(vertical = 20.dp),
+                                                                    contentAlignment = Alignment.Center
+                                                                ) {
+                                                                    Text(
+                                                                        "Tidak ada perangkat komputer lab ditemukan.",
+                                                                        color = MaterialTheme.colorScheme.secondary,
+                                                                        fontSize = 13.sp
+                                                                    )
+                                                                }
+                                                            } else {
+                                                                LazyColumn(
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                        .heightIn(max = 280.dp),
+                                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                                ) {
+                                                                    items(modalFilteredPcUnits) { pc ->
+                                                                        Surface(
+                                                                            modifier = Modifier
+                                                                                .fillMaxWidth()
+                                                                                .clip(RoundedCornerShape(14.dp))
+                                                                                .clickable {
+                                                                                    selectedPc = pc
+                                                                                    alatSearchQuery = pc.name
+                                                                                    serialNumberInput = pc.serialNumber
+                                                                                    jumlahPemeliharaanInput = "1"
+                                                                                    selectedAlat = ItemWithStock(
+                                                                                        idBarang = pc.id,
+                                                                                        namaBarang = pc.name,
+                                                                                        kategori = pc.jenisPerangkat,
+                                                                                        stokTersedia = pc.qty,
+                                                                                        stokAwal = pc.qty,
+                                                                                        satuan = pc.satuan,
+                                                                                        kondisi = pc.status,
+                                                                                        ruang = pc.labRoom
+                                                                                    )
+                                                                                    dropdownExpanded = false
+                                                                                },
+                                                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                                            shape = RoundedCornerShape(14.dp)
+                                                                        ) {
+                                                                            Row(
+                                                                                modifier = Modifier
+                                                                                    .fillMaxWidth()
+                                                                                    .padding(10.dp),
+                                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                                            ) {
+                                                                                Icon(
+                                                                                    Icons.Default.Computer,
+                                                                                    contentDescription = null,
+                                                                                    tint = MaterialTheme.colorScheme.primary,
+                                                                                    modifier = Modifier.size(22.dp)
+                                                                                )
+                                                                                Column(modifier = Modifier.weight(1f)) {
+                                                                                    Text(
+                                                                                        pc.name,
+                                                                                        fontWeight = FontWeight.Bold,
+                                                                                        fontSize = 13.5.sp,
+                                                                                        maxLines = 1,
+                                                                                        overflow = TextOverflow.Ellipsis
+                                                                                    )
+                                                                                    Text(
+                                                                                        "ID: ${pc.id} • ${pc.labRoom} • SN: ${pc.serialNumber}",
+                                                                                        fontSize = 11.sp,
+                                                                                        color = Color.Gray,
+                                                                                        maxLines = 1,
+                                                                                        overflow = TextOverflow.Ellipsis
+                                                                                    )
+                                                                                }
+                                                                                Column(horizontalAlignment = Alignment.End) {
+                                                                                    Text(
+                                                                                        "Qty: ${pc.qty} ${pc.satuan}",
+                                                                                        fontSize = 11.sp,
+                                                                                        fontWeight = FontWeight.Bold,
+                                                                                        color = Color(0xFF059669)
+                                                                                    )
+                                                                                    Text(
+                                                                                        pc.status,
+                                                                                        fontSize = 10.sp,
+                                                                                        color = MaterialTheme.colorScheme.primary
+                                                                                    )
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                confirmButton = {
+                                                    TextButton(
+                                                        onClick = { dropdownExpanded = false },
+                                                        modifier = Modifier.testTag("btn_tutup_modal_perangkat")
+                                                    ) {
+                                                        Text("Tutup", fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            )
                                         }
 
                                         Spacer(modifier = Modifier.width(8.dp))
